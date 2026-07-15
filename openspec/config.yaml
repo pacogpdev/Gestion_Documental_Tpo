@@ -1,0 +1,22 @@
+project: proyecto_facturas_proveedores
+stack:
+  backend:
+    language: python
+    framework: fastapi
+    database: postgresql
+    orm: sqlalchemy
+    tools: [azure-ai-formrecognizer]
+  frontend:
+    language: typescript
+    framework: react
+    bundler: vite
+testing:
+  strict_tdd: true
+  backend:
+    runner: pytest
+    command: "cd backend && pytest"
+    layers: [unit, integration]
+  frontend:
+    runner: vitest
+    command: "cd frontend && npm test"
+    layers: [unit, component]
