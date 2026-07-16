@@ -1,9 +1,19 @@
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from backend.app.main import app
 from backend.app.models.schemas import Invoice, Supplier
+from backend.app.api.endpoints.invoices import get_storage_service
+from backend.app.services.storage_service import StorageUploadError
+
+
+def override_storage(storage):
+    app.dependency_overrides[get_storage_service] = lambda: storage
 
 
 def test_list_invoices_returns_empty_list_when_no_invoices(client, db_session):
@@ -298,3 +308,131 @@ def test_edge_case_5_whitespace_trim(client, db_session):
     # Verify the stored invoice_number is trimmed and uppercase
     invoice = db_session.query(Invoice).first()
     assert invoice.invoice_number == "TRIM-001"
+
+
+def test_upload_persists_exact_blob_url_and_pending_status(client, db_session):
+    extraction_result = {
+        "tax_id": "TAX-BLOB-001",
+        "supplier_name": "Blob Supplier",
+        "invoice_number": "BLOB-001",
+        "date": date(2024, 10, 1),
+        "total_amount": 99.5,
+        "currency": "EUR",
+        "line_items": [],
+    }
+    storage = MagicMock()
+    storage.upload_pdf.return_value = (
+        "https://storage.example/facturas-proveedores/TAX-BLOB-001/invoice/file.pdf"
+    )
+    override_storage(storage)
+    pdf_bytes = b"%PDF-known-original-bytes"
+
+    with patch(
+        "backend.app.api.endpoints.invoices.extract_invoice_data",
+        return_value=extraction_result,
+    ):
+        response = client.post(
+            "/api/invoices/upload",
+            files={"file": ("invoice.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert response.status_code == 200
+    invoice = db_session.query(Invoice).one()
+    assert invoice.file_url == storage.upload_pdf.return_value
+    assert invoice.status == "Pending"
+    assert storage.upload_pdf.call_args.args[0] == pdf_bytes
+    assert storage.upload_pdf.call_args.args[1] == str(invoice.supplier_id)
+    assert storage.upload_pdf.call_args.args[2] == str(invoice.id)
+
+
+def test_storage_failure_returns_503_and_rolls_back_invoice_and_supplier(client, db_session):
+    extraction_result = {
+        "tax_id": "TAX-STORAGE-FAIL",
+        "supplier_name": "Storage Failure Supplier",
+        "invoice_number": "STORAGE-FAIL-001",
+        "date": date(2024, 10, 2),
+        "total_amount": 10.0,
+        "currency": "EUR",
+        "line_items": [],
+    }
+    storage = MagicMock()
+    storage.upload_pdf.side_effect = StorageUploadError("Azure upload failed")
+    override_storage(storage)
+
+    with patch(
+        "backend.app.api.endpoints.invoices.extract_invoice_data",
+        return_value=extraction_result,
+    ):
+        response = client.post(
+            "/api/invoices/upload",
+            files={"file": ("invoice.pdf", b"pdf", "application/pdf")},
+        )
+
+    assert response.status_code == 503
+    assert "storage" in response.json()["detail"].lower()
+    assert db_session.query(Invoice).count() == 0
+    assert db_session.query(Supplier).count() == 0
+
+
+def test_commit_race_returns_409_and_cleans_up_uploaded_blob(client, db_session):
+    extraction_result = {
+        "tax_id": "TAX-RACE",
+        "supplier_name": "Race Supplier",
+        "invoice_number": "RACE-001",
+        "date": date(2024, 10, 3),
+        "total_amount": 15.0,
+        "currency": "EUR",
+        "line_items": [],
+    }
+    blob_url = "https://storage.example/facturas-proveedores/supplier/invoice/file.pdf"
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    storage.upload_pdf.return_value = blob_url
+    override_storage(storage)
+
+    race_error = IntegrityError("insert", {}, RuntimeError("unique constraint"))
+    with patch(
+        "backend.app.api.endpoints.invoices.extract_invoice_data",
+        return_value=extraction_result,
+    ), patch.object(db_session, "commit", side_effect=race_error):
+        response = client.post(
+            "/api/invoices/upload",
+            files={"file": ("invoice.pdf", b"pdf", "application/pdf")},
+        )
+
+    assert response.status_code == 409
+    assert "race condition" in response.json()["detail"].lower()
+    assert db_session.query(Invoice).count() == 0
+    storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
+
+
+def test_commit_failure_cleans_up_blob_and_preserves_original_error(client, db_session):
+    extraction_result = {
+        "tax_id": "TAX-COMMIT-FAIL",
+        "supplier_name": "Commit Failure Supplier",
+        "invoice_number": "COMMIT-FAIL-001",
+        "date": date(2024, 10, 4),
+        "total_amount": 20.0,
+        "currency": "EUR",
+        "line_items": [],
+    }
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    storage.upload_pdf.return_value = (
+        "https://storage.example/facturas-proveedores/supplier/invoice/file.pdf"
+    )
+    override_storage(storage)
+    commit_error = RuntimeError("database unavailable")
+
+    with patch(
+        "backend.app.api.endpoints.invoices.extract_invoice_data",
+        return_value=extraction_result,
+    ), patch.object(db_session, "commit", side_effect=commit_error):
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            client.post(
+                "/api/invoices/upload",
+                files={"file": ("invoice.pdf", b"pdf", "application/pdf")},
+            )
+
+    assert db_session.query(Invoice).count() == 0
+    storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
