@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Facturas Control"
     API_V1_STR: str = "/api/v1"
     
-    # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/facturas_db"
+    # Database (SQLite dev, Azure SQL prod — set via .env)
+    DATABASE_URL: str = "sqlite:///backend/test.db"
     
     # Azure Entra ID
     ENTRA_ID_TENANT_ID: str = ""
