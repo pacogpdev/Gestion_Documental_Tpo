@@ -3,6 +3,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 from sqlalchemy import Column, String, ForeignKey, DateTime, Date, Numeric, Table, TypeDecorator, CHAR, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 from sqlalchemy.orm import relationship
 
 from backend.app.core.database import Base
@@ -17,6 +18,8 @@ class GUID(TypeDecorator):
     def load_dialect_impl(self, dialect):
         if dialect.name == 'postgresql':
             return dialect.type_descriptor(PG_UUID())
+        elif dialect.name == 'mssql':
+            return UNIQUEIDENTIFIER()
         else:
             return dialect.type_descriptor(CHAR(36))
 
@@ -25,6 +28,8 @@ class GUID(TypeDecorator):
             return value
         elif dialect.name == 'postgresql':
             return str(value)
+        elif dialect.name == 'mssql':
+            return str(value if isinstance(value, uuid.UUID) else uuid.UUID(value))
         else:
             if not isinstance(value, uuid.UUID):
                 return "%.32x" % uuid.UUID(value).int

@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.dialects import mssql, sqlite
 from sqlalchemy.orm import sessionmaker
+from unittest.mock import MagicMock
 import os
 
 # Import the app and dependencies
@@ -13,11 +15,22 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from backend.app.main import app
 from backend.app.core.database import get_db, Base, db_manager, DatabaseManager
 from backend.app.core.security import get_current_user
+from backend.app.api.endpoints.invoices import get_storage_service
 # IMPORTANT: Import models so they register with Base.metadata before create_all
 from backend.app.models.schemas import Invoice, Supplier, LineItem, Role, User, AuditLog
 
 # Use a temporary file for SQLite to avoid :memory: concurrency issues with FastAPI's threadpool
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_db.sqlite"
+
+
+@pytest.fixture
+def sqlite_dialect():
+    return sqlite.dialect()
+
+
+@pytest.fixture
+def mssql_dialect():
+    return mssql.dialect()
 
 @pytest.fixture(scope="function")
 def db_session():
@@ -52,8 +65,16 @@ def client(db_session):
             "roles": ["Admin", "Clerk", "Approver"]
         }
 
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    storage.upload_pdf.side_effect = (
+        lambda pdf_bytes, supplier_id, invoice_id:
+        f"https://test-storage.example/facturas-proveedores/{supplier_id}/{invoice_id}.pdf"
+    )
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_storage_service] = lambda: storage
 
     with TestClient(app) as test_client:
         yield test_client
