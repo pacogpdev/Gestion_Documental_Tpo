@@ -128,16 +128,40 @@ def test_migrates_all_tables_preserving_values_and_relationships(tmp_path):
     session.close()
 
 
-def test_migration_preserves_fk_order_and_handles_empty_source(tmp_path):
+def test_migration_aborts_for_empty_source_before_creating_target_schema(tmp_path):
     source = manager_for(tmp_path / "empty-source.sqlite")
     target = manager_for(tmp_path / "empty-target.sqlite")
     progress = []
 
-    summary = migrate_database(source, target, progress_callback=progress.append)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Source database is missing required tables: "
+            r"roles, users, suppliers, invoices, user_roles, line_items, audit_logs\. "
+            r"Migration aborted\."
+        ),
+    ):
+        migrate_database(source, target, progress_callback=progress.append)
 
-    assert summary == MigrationSummary(total_tables=7, total_rows=0)
-    assert progress == [f"{table}: 0 row(s)" for table in TABLE_MIGRATION_ORDER]
-    assert set(inspect(target.engine).get_table_names()) == set(TABLE_MIGRATION_ORDER)
+    assert progress == []
+    assert inspect(target.engine).get_table_names() == []
+
+
+def test_migration_aborts_for_partially_missing_source_before_creating_target_schema(
+    tmp_path,
+):
+    source = manager_for(tmp_path / "partial-source.sqlite")
+    target = manager_for(tmp_path / "partial-target.sqlite")
+    Base.metadata.create_all(source.engine)
+    Base.metadata.tables["audit_logs"].drop(source.engine)
+
+    with pytest.raises(
+        ValueError,
+        match=r"Source database is missing required tables: audit_logs\. Migration aborted\.",
+    ):
+        migrate_database(source, target)
+
+    assert inspect(target.engine).get_table_names() == []
 
 
 def test_failed_copy_rolls_back_the_entire_target_transaction(tmp_path):

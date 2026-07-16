@@ -82,11 +82,22 @@ def migrate_database(
     source_session = source_manager.get_session()
     target_session = target_manager.get_session()
     try:
+        source_tables = set(inspect(source_manager.engine).get_table_names())
+        missing_tables = [
+            table_name
+            for table_name in TABLE_MIGRATION_ORDER
+            if table_name not in source_tables
+        ]
+        if missing_tables:
+            raise ValueError(
+                "Source database is missing required tables: "
+                f"{', '.join(missing_tables)}. Migration aborted."
+            )
+
         # The target schema is created before the data transaction. A schema
         # creation failure is propagated and never reported as a successful
         # migration.
         Base.metadata.create_all(bind=target_manager.engine)
-        source_tables = set(inspect(source_manager.engine).get_table_names())
 
         total_rows = 0
         with target_session.begin():
