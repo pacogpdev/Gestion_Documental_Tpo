@@ -107,3 +107,82 @@ def test_delete_blob_gets_named_blob_and_calls_delete():
         blob="supplier-1/invoice-1/file.pdf",
     )
     blob_client.delete_blob.assert_called_once_with()
+
+
+def test_get_blob_sas_url_returns_url_with_read_only_sas_parameters():
+    service = BlobStorageService(
+        connection_string=(
+            "DefaultEndpointsProtocol=https;AccountName=pedroortizst;"
+            "AccountKey=account-key;EndpointSuffix=core.windows.net"
+        ),
+        container_name="facturas-proveedores",
+        client=MagicMock(),
+    )
+
+    with patch(
+        "backend.app.services.storage_service.generate_blob_sas",
+        return_value="sv=2024-01-01&sr=b&sp=r&sig=mock-signature",
+    ) as generate_blob_sas:
+        url = service.get_blob_sas_url("supplier/invoice/file.pdf")
+
+    assert url.startswith(
+        "https://pedroortizst.blob.core.windows.net/"
+        "facturas-proveedores/supplier/invoice/file.pdf?"
+    )
+    assert "sp=r" in url
+    assert "sig=mock-signature" in url
+    generate_blob_sas.assert_called_once()
+    assert generate_blob_sas.call_args.kwargs["account_name"] == "pedroortizst"
+    assert generate_blob_sas.call_args.kwargs["container_name"] == "facturas-proveedores"
+    assert generate_blob_sas.call_args.kwargs["blob_name"] == "supplier/invoice/file.pdf"
+    assert generate_blob_sas.call_args.kwargs["account_key"] == "account-key"
+    assert generate_blob_sas.call_args.kwargs["permission"].read is True
+
+
+def test_get_blob_sas_url_raises_config_error_when_generation_fails():
+    service = BlobStorageService(
+        connection_string=(
+            "DefaultEndpointsProtocol=https;AccountName=pedroortizst;"
+            "AccountKey=account-key;EndpointSuffix=core.windows.net"
+        ),
+        container_name="facturas-proveedores",
+        client=MagicMock(),
+    )
+
+    with patch(
+        "backend.app.services.storage_service.generate_blob_sas",
+        side_effect=RuntimeError("invalid signing key"),
+    ):
+        with pytest.raises(StorageConfigError, match="SAS") as error:
+            service.get_blob_sas_url("supplier/invoice/file.pdf")
+
+    assert isinstance(error.value.__cause__, RuntimeError)
+
+
+def test_extract_blob_name_from_azure_url_returns_container_relative_name():
+    service = BlobStorageService(
+        connection_string=(
+            "DefaultEndpointsProtocol=https;AccountName=pedroortizst;"
+            "AccountKey=account-key;EndpointSuffix=core.windows.net"
+        ),
+        container_name="facturas-proveedores",
+        client=MagicMock(),
+    )
+
+    assert service.extract_blob_name_from_url(
+        "https://pedroortizst.blob.core.windows.net/"
+        "facturas-proveedores/supplier/invoice/file.pdf?sv=token"
+    ) == "supplier/invoice/file.pdf"
+
+
+def test_extract_blob_name_from_url_returns_none_for_legacy_path():
+    service = BlobStorageService(
+        connection_string=(
+            "DefaultEndpointsProtocol=https;AccountName=pedroortizst;"
+            "AccountKey=account-key;EndpointSuffix=core.windows.net"
+        ),
+        container_name="facturas-proveedores",
+        client=MagicMock(),
+    )
+
+    assert service.extract_blob_name_from_url("/uploads/legacy.pdf") is None

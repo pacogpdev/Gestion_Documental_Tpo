@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '../test-utils';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
 import ApprovalDashboard from './ApprovalDashboard';
-import { approvalDashboardHandlers } from './ApprovalDashboard.handlers';
+import { approvalDashboardHandlers, pdfViewHandlers } from './ApprovalDashboard.handlers';
 
 describe('ApprovalDashboard', () => {
   beforeEach(() => {
@@ -330,6 +330,45 @@ describe('ApprovalDashboard', () => {
       fireEvent.click(screen.getByTestId('sort-date'));
       fireEvent.click(screen.getByTestId('sort-date'));
       expect(screen.getByTestId('sort-date')).toHaveAttribute('aria-sort', 'descending');
+    });
+  });
+
+  describe('2.9 — PDF view action', () => {
+    it('renders the view control only for Azure URLs and opens the PDF in a new tab', async () => {
+      server.use(...pdfViewHandlers);
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+      render(<ApprovalDashboard />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token', route: '/approvals',
+      });
+
+      await waitFor(() => expect(screen.getByTestId('invoice-row-inv-pdf')).toBeInTheDocument());
+
+      const viewButton = screen.getByTestId('view-pdf-btn-inv-pdf');
+      expect(viewButton).toBeEnabled();
+
+      fireEvent.click(viewButton);
+
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://storage.example/facturas-proveedores/supplier/invoice/file.pdf',
+        '_blank',
+      );
+      openSpy.mockRestore();
+    });
+
+    it('hides the view control for legacy and missing file URLs', async () => {
+      server.use(...pdfViewHandlers);
+
+      render(<ApprovalDashboard />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token', route: '/approvals',
+      });
+
+      await waitFor(() => expect(screen.getByTestId('invoice-row-inv-missing')).toBeInTheDocument());
+
+      expect(screen.queryByTestId('view-pdf-btn-inv-legacy')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('view-pdf-btn-inv-missing')).not.toBeInTheDocument();
     });
   });
 });

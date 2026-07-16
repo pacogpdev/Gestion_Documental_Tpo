@@ -9,6 +9,7 @@ interface Invoice {
   totalAmount: number;
   currency: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  fileUrl: string | null;
 }
 
 type StatusFilter = 'All' | 'Pending' | 'Approved' | 'Rejected';
@@ -81,6 +82,10 @@ const ApprovalDashboard: React.FC = () => {
       console.error('Failed to delete invoice', error);
       alert('Error deleting invoice');
     }
+  };
+
+  const handleViewPdf = (fileUrl: string) => {
+    window.open(fileUrl, '_blank');
   };
 
   const counts = {
@@ -266,6 +271,22 @@ const ApprovalDashboard: React.FC = () => {
                           Approve
                         </button>
                       </>
+                    )}
+                    {inv.fileUrl && !inv.fileUrl.startsWith('/uploads/') && (
+                      <button
+                        data-testid={`view-pdf-btn-${inv.id}`}
+                        onClick={() => handleViewPdf(inv.fileUrl as string)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="View PDF"
+                        aria-label="View PDF"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="16" y1="13" x2="8" y2="13" />
+                          <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                      </button>
                     )}
                     <button
                       data-testid={`delete-btn-${inv.id}`}

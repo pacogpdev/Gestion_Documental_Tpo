@@ -13,8 +13,10 @@ from backend.app.core.database import get_db
 import uuid
 from datetime import datetime, date
 from urllib.parse import urlparse
+import logging
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+logger = logging.getLogger(__name__)
 
 
 def _resolve_supplier(db: Session, extraction_result: dict) -> tuple:
@@ -88,14 +90,37 @@ def _blob_name_from_url(blob_url: str, storage: BlobStorageService) -> str | Non
 
 
 def _cleanup_uploaded_blob(blob_url: str, storage: BlobStorageService) -> None:
-    """Attempt cleanup without masking the database exception being handled."""
-    blob_name = _blob_name_from_url(blob_url, storage)
-    if not blob_name:
+    """Attempt Azure cleanup without masking the database exception being handled."""
+    if not blob_url or blob_url.startswith("/uploads/") or not blob_url.startswith("https://"):
         return
     try:
+        blob_name = _blob_name_from_url(blob_url, storage)
+        if not blob_name:
+            return
         storage.delete_blob(blob_name)
-    except Exception:
-        return
+    except Exception as error:
+        logger.warning("Unable to clean up invoice blob %s: %s", blob_url, error)
+
+
+def _sas_url_for_invoice(
+    file_url: str | None,
+    storage: BlobStorageService,
+) -> str | None:
+    """Return an on-demand SAS URL for Azure files, excluding legacy paths."""
+    if not file_url or file_url.startswith("/uploads/"):
+        return None
+
+    blob_name = storage.extract_blob_name_from_url(file_url)
+    if not isinstance(blob_name, str) or not blob_name:
+        return None
+
+    try:
+        return storage.get_blob_sas_url(blob_name)
+    except StorageConfigError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Blob storage is unavailable",
+        ) from error
 
 
 @router.post("/upload")
@@ -202,25 +227,29 @@ async def upload_invoice(
 @router.get("", response_model=list[InvoiceResponse])
 def list_invoices(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    storage: BlobStorageService = Depends(get_storage_service),
 ):
     """
     Lists all invoices for the approval dashboard.
     Returns camelCase JSON with supplier name resolved.
     """
     invoices = db.query(Invoice).options(selectinload(Invoice.supplier)).all()
-    return [
-        InvoiceResponse(
-            id=str(inv.id),
-            invoiceNumber=inv.invoice_number,
-            supplierName=inv.supplier.name,
-            date=inv.date,
-            totalAmount=float(inv.total_amount),
-            currency=inv.currency,
-            status=inv.status,
+    responses = []
+    for inv in invoices:
+        responses.append(
+            InvoiceResponse(
+                id=str(inv.id),
+                invoiceNumber=inv.invoice_number,
+                supplierName=inv.supplier.name,
+                date=inv.date,
+                totalAmount=float(inv.total_amount),
+                currency=inv.currency,
+                status=inv.status,
+                fileUrl=_sas_url_for_invoice(inv.file_url, storage),
+            )
         )
-        for inv in invoices
-    ]
+    return responses
 
 from pydantic import BaseModel
 
@@ -232,7 +261,8 @@ def delete_invoice(
     id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Clerk", "Admin"]))
+    _ = Depends(RoleChecker(["Clerk", "Admin"])),
+    storage: BlobStorageService = Depends(get_storage_service),
 ):
     """
     Deletes an invoice and its line items.
@@ -240,6 +270,8 @@ def delete_invoice(
     invoice = db.query(Invoice).filter(Invoice.id == id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+
+    _cleanup_uploaded_blob(invoice.file_url, storage)
     
     # Delete associated line items first (FK constraint)
     db.query(LineItem).filter(LineItem.invoice_id == id).delete()

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from backend.app.main import app
-from backend.app.models.schemas import Invoice, Supplier
+from backend.app.models.schemas import Invoice, InvoiceResponse, Supplier
 from backend.app.api.endpoints.invoices import get_storage_service
 from backend.app.services.storage_service import StorageUploadError
 
@@ -436,3 +436,148 @@ def test_commit_failure_cleans_up_blob_and_preserves_original_error(client, db_s
 
     assert db_session.query(Invoice).count() == 0
     storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
+
+
+def _persist_invoice(db_session, *, file_url):
+    supplier_id = uuid.uuid4()
+    db_session.add(Supplier(id=supplier_id, name="Delete Supplier", tax_id=str(supplier_id)))
+    db_session.commit()
+
+    invoice_id = uuid.uuid4()
+    db_session.add(Invoice(
+        id=invoice_id,
+        supplier_id=supplier_id,
+        invoice_number=f"DELETE-{invoice_id}",
+        date=date(2024, 10, 5),
+        total_amount=Decimal("10.00"),
+        currency="EUR",
+        status="Pending",
+        file_url=file_url,
+    ))
+    db_session.commit()
+    return invoice_id
+
+
+def test_delete_invoice_removes_azure_blob_before_database_row(client, db_session):
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    override_storage(storage)
+    invoice_id = _persist_invoice(
+        db_session,
+        file_url=(
+            "https://pedroortizst.blob.core.windows.net/"
+            "facturas-proveedores/supplier/invoice/file.pdf?sv=token"
+        ),
+    )
+
+    response = client.delete(f"/api/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
+    assert db_session.get(Invoice, invoice_id) is None
+
+
+def test_delete_invoice_skips_legacy_upload_path(client, db_session):
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    override_storage(storage)
+    invoice_id = _persist_invoice(db_session, file_url="/uploads/legacy.pdf")
+
+    response = client.delete(f"/api/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    storage.delete_blob.assert_not_called()
+    assert db_session.get(Invoice, invoice_id) is None
+
+
+def test_delete_invoice_continues_when_blob_cleanup_fails(client, db_session):
+    storage = MagicMock()
+    storage.container_name = "facturas-proveedores"
+    storage.delete_blob.side_effect = RuntimeError("Azure unavailable")
+    override_storage(storage)
+    invoice_id = _persist_invoice(
+        db_session,
+        file_url="https://storage.example/facturas-proveedores/supplier/invoice/file.pdf",
+    )
+
+    response = client.delete(f"/api/invoices/{invoice_id}")
+
+    assert response.status_code == 200
+    storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
+    assert db_session.get(Invoice, invoice_id) is None
+
+
+def test_list_invoices_returns_sas_url_without_changing_stored_file_url(client, db_session):
+    file_url = (
+        "https://pedroortizst.blob.core.windows.net/"
+        "facturas-proveedores/supplier/invoice/file.pdf"
+    )
+    storage = MagicMock()
+    storage.extract_blob_name_from_url.return_value = "supplier/invoice/file.pdf"
+    storage.get_blob_sas_url.return_value = f"{file_url}?sv=token&sp=r"
+    override_storage(storage)
+    invoice_id = _persist_invoice(db_session, file_url=file_url)
+
+    response = client.get("/api/invoices")
+
+    assert response.status_code == 200
+    assert response.json()[0]["fileUrl"] == f"{file_url}?sv=token&sp=r"
+    assert db_session.get(Invoice, invoice_id).file_url == file_url
+    assert db_session.get(Invoice, invoice_id) is not None
+
+
+def test_invoice_response_serializes_missing_file_url_as_null():
+    response = InvoiceResponse(
+        id="invoice-id",
+        invoiceNumber="INV-001",
+        supplierName="Supplier",
+        date=date(2024, 10, 5),
+        totalAmount=10.0,
+        currency="EUR",
+        status="Pending",
+        fileUrl=None,
+    )
+
+    assert response.model_dump()["fileUrl"] is None
+    assert '"fileUrl":null' in response.model_dump_json()
+
+
+def test_list_invoices_returns_sas_file_url_for_azure_blob(client, db_session):
+    storage = MagicMock()
+    storage.extract_blob_name_from_url.return_value = "supplier/invoice/file.pdf"
+    storage.get_blob_sas_url.return_value = (
+        "https://pedroortizst.blob.core.windows.net/"
+        "facturas-proveedores/supplier/invoice/file.pdf?sv=token&sp=r"
+    )
+    override_storage(storage)
+    invoice_id = _persist_invoice(
+        db_session,
+        file_url=(
+            "https://pedroortizst.blob.core.windows.net/"
+            "facturas-proveedores/supplier/invoice/file.pdf"
+        ),
+    )
+
+    response = client.get("/api/invoices")
+
+    assert response.status_code == 200
+    assert response.json()[0]["fileUrl"].endswith("?sv=token&sp=r")
+    storage.extract_blob_name_from_url.assert_called_once_with(
+        "https://pedroortizst.blob.core.windows.net/"
+        "facturas-proveedores/supplier/invoice/file.pdf"
+    )
+    storage.get_blob_sas_url.assert_called_once_with("supplier/invoice/file.pdf")
+    assert db_session.get(Invoice, invoice_id) is not None
+
+
+def test_list_invoices_returns_null_file_url_for_legacy_upload(client, db_session):
+    storage = MagicMock()
+    override_storage(storage)
+    _persist_invoice(db_session, file_url="/uploads/legacy.pdf")
+
+    response = client.get("/api/invoices")
+
+    assert response.status_code == 200
+    assert response.json()[0]["fileUrl"] is None
+    storage.extract_blob_name_from_url.assert_not_called()
+    storage.get_blob_sas_url.assert_not_called()

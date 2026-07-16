@@ -122,6 +122,7 @@ class InvoiceResponse(BaseModel):
     totalAmount: float
     currency: str
     status: str
+    fileUrl: str | None = None
 
     class Config:
         from_attributes = True
