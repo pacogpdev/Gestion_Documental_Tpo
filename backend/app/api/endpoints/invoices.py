@@ -3,10 +3,16 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from backend.app.models.schemas import Invoice, LineItem, Supplier, InvoiceResponse
 from backend.app.services.ai_service import extract_invoice_data
+from backend.app.services.storage_service import (
+    BlobStorageService,
+    StorageConfigError,
+    StorageUploadError,
+)
 from backend.app.core.security import get_current_user, RoleChecker
 from backend.app.core.database import get_db
 import uuid
 from datetime import datetime, date
+from urllib.parse import urlparse
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -57,12 +63,48 @@ def _normalize_invoice_number(raw: str | None) -> str:
     return normalized
 
 
+def get_storage_service() -> BlobStorageService:
+    """FastAPI factory kept separate so tests can inject a mock service."""
+    try:
+        return BlobStorageService()
+    except StorageConfigError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Blob storage is unavailable",
+        ) from error
+
+
+def _blob_name_from_url(blob_url: str, storage: BlobStorageService) -> str | None:
+    """Extract the container-relative name needed for cleanup after a DB error."""
+    container_name = getattr(storage, "container_name", None)
+    if not isinstance(container_name, str) or not container_name:
+        return None
+
+    path = urlparse(blob_url).path.lstrip("/")
+    prefix = f"{container_name}/"
+    if not path.startswith(prefix):
+        return None
+    return path[len(prefix):]
+
+
+def _cleanup_uploaded_blob(blob_url: str, storage: BlobStorageService) -> None:
+    """Attempt cleanup without masking the database exception being handled."""
+    blob_name = _blob_name_from_url(blob_url, storage)
+    if not blob_name:
+        return
+    try:
+        storage.delete_blob(blob_name)
+    except Exception:
+        return
+
+
 @router.post("/upload")
 async def upload_invoice(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Clerk", "Admin"]))
+    _ = Depends(RoleChecker(["Clerk", "Admin"])),
+    storage: BlobStorageService = Depends(get_storage_service),
 ):
     """
     Uploads an invoice, extracts data using AI, and PERSISTS it to the database.
@@ -95,42 +137,60 @@ async def upload_invoice(
                 detail=f"Duplicate invoice: invoice number '{invoice_number}' already exists for supplier '{supplier_name}'."
             )
 
-    invoice_date = extraction_result.get("date") or date.today()
-    new_invoice = Invoice(
-        id=uuid.uuid4(),
-        supplier_id=supplier.id,
-        invoice_number=invoice_number,
-        date=invoice_date,
-        total_amount=extraction_result.get("total_amount", 0.0),
-        currency=extraction_result.get("currency", "EUR"),
-        status="Pending",
-        file_url=f"/uploads/{file.filename}"
-    )
-    db.add(new_invoice)
-    db.flush()
-
-    # 5. Create Line Items
-    for item in extraction_result["line_items"]:
-        li = LineItem(
-            id=uuid.uuid4(),
-            invoice_id=new_invoice.id,
-            description=item["description"],
-            quantity=item["quantity"],
-            unit_price=item["unit_price"],
-            total_price=item["total_price"]
-        )
-        db.add(li)
-
-    # 6. COMMIT everything to DB
-    # Edge case #3: catch DB-level IntegrityError as race-condition safety net
+    # Assign the invoice UUID before storage so the blob is namespaced by the
+    # same ID that will be persisted. Storage must succeed before any invoice
+    # row can be committed.
+    invoice_id = uuid.uuid4()
     try:
+        blob_url = storage.upload_pdf(content, str(supplier.id), str(invoice_id))
+    except (StorageConfigError, StorageUploadError) as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Blob storage upload failed",
+        ) from error
+
+    try:
+        invoice_date = extraction_result.get("date") or date.today()
+        new_invoice = Invoice(
+            id=invoice_id,
+            supplier_id=supplier.id,
+            invoice_number=invoice_number,
+            date=invoice_date,
+            total_amount=extraction_result.get("total_amount", 0.0),
+            currency=extraction_result.get("currency", "EUR"),
+            status="Pending",
+            file_url=blob_url
+        )
+        db.add(new_invoice)
+        db.flush()
+
+        # 5. Create Line Items
+        for item in extraction_result["line_items"]:
+            li = LineItem(
+                id=uuid.uuid4(),
+                invoice_id=new_invoice.id,
+                description=item["description"],
+                quantity=item["quantity"],
+                unit_price=item["unit_price"],
+                total_price=item["total_price"]
+            )
+            db.add(li)
+
+        # 6. COMMIT everything to DB
+        # Edge case #3: catch DB-level IntegrityError as race-condition safety net
         db.commit()
     except IntegrityError:
         db.rollback()
+        _cleanup_uploaded_blob(blob_url, storage)
         raise HTTPException(
             status_code=409,
             detail=f"Duplicate invoice: invoice number '{invoice_number}' already exists for supplier '{supplier_name}' (race condition caught)."
         )
+    except Exception:
+        db.rollback()
+        _cleanup_uploaded_blob(blob_url, storage)
+        raise
     db.refresh(new_invoice)
     
     return {
