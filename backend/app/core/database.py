@@ -9,11 +9,15 @@ class DatabaseManager:
     Allows swapping the engine for testing purposes.
     """
     def __init__(self, db_url: str = None):
-        self.db_url = db_url or settings.DATABASE_URL
-        self._engine = create_engine(
-            self.db_url, 
-            connect_args={"check_same_thread": False} if "sqlite" in self.db_url else {}
-        )
+        self.db_url = settings.DATABASE_URL if db_url is None else db_url
+        engine_options = {}
+        if self.db_url.startswith("sqlite"):
+            engine_options["connect_args"] = {"check_same_thread": False}
+
+        # Do not catch engine or connection errors here. The configured database
+        # must remain the source of truth; falling back to SQLite would hide
+        # production outages and could write data to the wrong store.
+        self._engine = create_engine(self.db_url, **engine_options)
         self._session_factory = sessionmaker(
             autocommit=False, 
             autoflush=False, 

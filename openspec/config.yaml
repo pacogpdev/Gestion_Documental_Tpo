@@ -3,9 +3,9 @@ stack:
   backend:
     language: python
     framework: fastapi
-    database: postgresql
+    database: sqlite  # Dev database; Azure SQL Server planned for production
     orm: sqlalchemy
-    tools: [azure-ai-formrecognizer]
+    tools: [azure-ai-contentunderstanding, azure-blob-storage]
   frontend:
     language: typescript
     framework: react

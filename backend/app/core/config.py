@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # Azure Blob Storage
     AZURE_STORAGE_CONNECTION_STRING: str = ""
-    AZURE_STORAGE_CONTAINER: str = "invoices"
+    AZURE_STORAGE_CONTAINER: str = "facturas-proveedores"
 
     @field_validator('API_V1_STR')
     @classmethod
