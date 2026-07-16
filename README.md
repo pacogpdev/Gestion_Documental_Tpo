@@ -6,9 +6,10 @@ Sistema de extracción automatizada de datos de facturas mediante IA, con flujo 
 
 | Capa | Tecnología |
 |------|-----------|
-| **Backend** | Python 3.12+, FastAPI, SQLAlchemy, SQLite (dev) / PostgreSQL (prod) |
+| **Backend** | Python 3.12+, FastAPI, SQLAlchemy, SQLite (dev) / Azure SQL Server (prod) |
 | **Frontend** | Vite 5, React 18, TypeScript, Tailwind CSS 3 |
 | **IA** | Azure AI Content Understanding SDK |
+| **Storage** | Azure Blob Storage (persistencia de PDFs de facturas) |
 | **Auth** | Azure Entra ID (JWT) con bypass en desarrollo |
 | **Testing** | Vitest + React Testing Library + MSW (frontend), pytest (backend) |
 
@@ -67,7 +68,7 @@ Frontend disponible en `http://localhost:5173`.
 # Frontend (29 tests)
 cd frontend && npx vitest run
 
-# Backend (23 tests)
+# Backend (52 tests)
 cd backend && pytest -v
 ```
 
@@ -78,12 +79,13 @@ cd backend && pytest -v
 │   ├── app/
 │   │   ├── api/
 │   │   │   └── endpoints/       # FastAPI routers (invoices, suppliers, users)
-│   │   ├── core/                # Config, database engine, security/auth
+│   │   ├── core/                # Config, database engine (multi-engine), security/auth
 │   │   ├── models/              # SQLAlchemy models + Pydantic schemas
-│   │   ├── services/            # Azure AI Content Understanding integration
+│   │   ├── services/            # AI extraction + Blob Storage integration
 │   │   └── main.py              # FastAPI app entry point
 │   ├── tests/                   # Backend tests (pytest)
-│   ├── seed_db.py               # Database seeder con datos de prueba
+│   ├── seed_db.py               # Database seeder (engine-neutral, idempotent)
+│   ├── migrate_to_azure_sql.py  # SQLite → Azure SQL migration script
 │   ├── requirements.txt
 │   └── .env                     # Variables de entorno (local)
 │
@@ -121,7 +123,7 @@ cd backend && pytest -v
 
 | Endpoint | Método | Descripción | Roles |
 |----------|--------|-------------|-------|
-| `POST /api/invoices/upload` | Subir factura (PDF) → extracción IA → persistencia | Clerk, Admin |
+| `POST /api/invoices/upload` | Subir factura (PDF) → extracción IA → persistencia en Azure Blob Storage → guardado en BD | Clerk, Admin |
 | `GET /api/invoices` | Listar todas las facturas con datos del proveedor | Todos |
 | `PATCH /api/invoices/{id}/approve` | Aprobar o rechazar una factura | Approver, Admin |
 | `DELETE /api/invoices/{id}` | Eliminar una factura y sus line items | Clerk, Admin |
@@ -140,6 +142,10 @@ cd backend && pytest -v
 ### Lógica de Negocio
 
 - **Extracción por IA**: Azure Content Understanding extrae automáticamente número de factura, fecha, importe, proveedor, y line items del PDF
+- **Persistencia de PDF en Azure Blob Storage**: cada factura subida se guarda en `pedroortizst` / `facturas-proveedores` con naming `{supplier_id}/{invoice_id}/{uuid}.pdf`. El `file_url` almacenado es la URL real del blob
+- **Multi-engine database**: `DatabaseManager` selecciona SQLite (dev) o Azure SQL Server (prod) según `DATABASE_URL`. Sin fallback silencioso
+- **Migración SQLite → Azure SQL**: script `migrate_to_azure_sql.py` migra las 7 tablas en orden FK, transaccional, con rollback ante fallos
+- **Seed engine-neutral**: `seed_db.py` funciona con cualquier engine configurado, idempotente, transaccional
 - **Detección de duplicados**: Mismo `invoice_number` + `supplier_id` → error 409. Rejected invoices se reemplazan automáticamente
 - **Normalización de proveedor**: Búsqueda por tax_id, auto-actualización del nombre si cambia
 - **Estados**: `Pending` → `Approved` / `Rejected`. Upload siempre guarda como Pending
