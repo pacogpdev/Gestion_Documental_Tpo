@@ -458,7 +458,7 @@ def _persist_invoice(db_session, *, file_url):
     return invoice_id
 
 
-def test_delete_invoice_removes_azure_blob_before_database_row(client, db_session):
+def test_delete_invoice_commits_database_deletion_before_removing_azure_blob(client, db_session):
     storage = MagicMock()
     storage.container_name = "facturas-proveedores"
     override_storage(storage)
@@ -470,10 +470,21 @@ def test_delete_invoice_removes_azure_blob_before_database_row(client, db_sessio
         ),
     )
 
-    response = client.delete(f"/api/invoices/{invoice_id}")
+    call_order = []
+    original_commit = db_session.commit
+
+    def commit_then_record():
+        original_commit()
+        call_order.append("commit")
+
+    storage.delete_blob.side_effect = lambda _: call_order.append("blob_cleanup")
+
+    with patch.object(db_session, "commit", side_effect=commit_then_record):
+        response = client.delete(f"/api/invoices/{invoice_id}")
 
     assert response.status_code == 200
     storage.delete_blob.assert_called_once_with("supplier/invoice/file.pdf")
+    assert call_order == ["commit", "blob_cleanup"]
     assert db_session.get(Invoice, invoice_id) is None
 
 
@@ -581,3 +592,19 @@ def test_list_invoices_returns_null_file_url_for_legacy_upload(client, db_sessio
     assert response.json()[0]["fileUrl"] is None
     storage.extract_blob_name_from_url.assert_not_called()
     storage.get_blob_sas_url.assert_not_called()
+
+
+def test_list_invoices_works_without_configured_storage(client, db_session):
+    app.dependency_overrides.pop(get_storage_service, None)
+    _persist_invoice(
+        db_session,
+        file_url=(
+            "https://pedroortizst.blob.core.windows.net/"
+            "facturas-proveedores/supplier/invoice/file.pdf"
+        ),
+    )
+
+    response = client.get("/api/invoices")
+
+    assert response.status_code == 200
+    assert response.json()[0]["fileUrl"] is None

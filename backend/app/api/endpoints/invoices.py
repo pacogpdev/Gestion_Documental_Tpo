@@ -65,15 +65,12 @@ def _normalize_invoice_number(raw: str | None) -> str:
     return normalized
 
 
-def get_storage_service() -> BlobStorageService:
-    """FastAPI factory kept separate so tests can inject a mock service."""
+def get_storage_service() -> BlobStorageService | None:
+    """Return Blob Storage when configured; read-only endpoints may proceed without it."""
     try:
         return BlobStorageService()
-    except StorageConfigError as error:
-        raise HTTPException(
-            status_code=503,
-            detail="Blob storage is unavailable",
-        ) from error
+    except StorageConfigError:
+        return None
 
 
 def _blob_name_from_url(blob_url: str, storage: BlobStorageService) -> str | None:
@@ -134,6 +131,12 @@ async def upload_invoice(
     """
     Uploads an invoice, extracts data using AI, and PERSISTS it to the database.
     """
+    if storage is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Blob storage is unavailable",
+        )
+
     # 1. Extract data using the AI service
     content = await file.read()
     extraction_result = await extract_invoice_data(content, filename=file.filename or "invoice.pdf")
@@ -228,7 +231,7 @@ async def upload_invoice(
 def list_invoices(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
-    storage: BlobStorageService = Depends(get_storage_service),
+    storage: BlobStorageService | None = Depends(get_storage_service),
 ):
     """
     Lists all invoices for the approval dashboard.
@@ -237,6 +240,16 @@ def list_invoices(
     invoices = db.query(Invoice).options(selectinload(Invoice.supplier)).all()
     responses = []
     for inv in invoices:
+        file_url = None
+        if storage is not None:
+            try:
+                file_url = _sas_url_for_invoice(inv.file_url, storage)
+            except Exception as error:
+                logger.warning(
+                    "Unable to generate SAS URL for invoice %s: %s",
+                    inv.id,
+                    error,
+                )
         responses.append(
             InvoiceResponse(
                 id=str(inv.id),
@@ -246,7 +259,7 @@ def list_invoices(
                 totalAmount=float(inv.total_amount),
                 currency=inv.currency,
                 status=inv.status,
-                fileUrl=_sas_url_for_invoice(inv.file_url, storage),
+                fileUrl=file_url,
             )
         )
     return responses
@@ -262,7 +275,7 @@ def delete_invoice(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
     _ = Depends(RoleChecker(["Clerk", "Admin"])),
-    storage: BlobStorageService = Depends(get_storage_service),
+    storage: BlobStorageService | None = Depends(get_storage_service),
 ):
     """
     Deletes an invoice and its line items.
@@ -271,12 +284,13 @@ def delete_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    _cleanup_uploaded_blob(invoice.file_url, storage)
-    
+    blob_url = invoice.file_url
+
     # Delete associated line items first (FK constraint)
     db.query(LineItem).filter(LineItem.invoice_id == id).delete()
     db.delete(invoice)
     db.commit()
+    _cleanup_uploaded_blob(blob_url, storage)
     
     return {"status": "success", "deleted_id": str(id)}
 
