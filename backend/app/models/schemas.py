@@ -125,3 +125,41 @@ class InvoiceResponse(BaseModel):
     fileUrl: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MonthlyAmount(BaseModel):
+    month: str
+    amount: float
+
+
+class TopLineItem(BaseModel):
+    description: str
+    totalAmount: float
+    invoiceCount: int
+
+
+class StatusDistribution(BaseModel):
+    Approved: int
+    Rejected: int
+    Pending: int
+
+
+class TopInvoice(BaseModel):
+    number: str
+    amount: float
+
+
+class SupplierStatsResponse(BaseModel):
+    supplierName: str
+    taxId: str
+    totalInvoices: int
+    totalAmount: float
+    currency: str
+    monthlyAmounts: list[MonthlyAmount]
+    annualAccumulated: float
+    annualPercentage: float
+    grandTotalAllSuppliers: float
+    topLineItems: list[TopLineItem]
+    statusDistribution: StatusDistribution
+    averageInvoiceAmount: float
+    topInvoice: TopInvoice | None

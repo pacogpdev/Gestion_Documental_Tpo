@@ -1,6 +1,14 @@
+from datetime import date
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import distinct, extract, func
 from sqlalchemy.orm import Session
-from backend.app.models.schemas import Invoice, Supplier
+from backend.app.models.schemas import (
+    Invoice,
+    LineItem,
+    Supplier,
+    SupplierStatsResponse,
+)
 from backend.app.core.database import get_db
 from backend.app.core.security import get_current_user, RoleChecker
 import uuid
@@ -21,6 +29,147 @@ class SupplierResponse(BaseModel):
     taxId: str
     email: Optional[str] = None
     address: Optional[str] = None
+
+
+def _shift_month(month_start: date, offset: int) -> date:
+    month_index = month_start.year * 12 + month_start.month - 1 + offset
+    year, month_zero_based = divmod(month_index, 12)
+    return date(year, month_zero_based + 1, 1)
+
+
+def _trailing_year_window(today: date) -> tuple[date, date]:
+    current_month = today.replace(day=1)
+    return _shift_month(current_month, -11), _shift_month(current_month, 1)
+
+
+def _monthly_buckets(start: date, end: date) -> list[date]:
+    months: list[date] = []
+    current = start
+    while current < end:
+        months.append(current)
+        current = _shift_month(current, 1)
+    return months
+
+
+def _as_float(value: Decimal | int | float | None) -> float:
+    return float(value or 0)
+
+
+def _status_distribution(status_totals) -> dict[str, int]:
+    distribution = {"Approved": 0, "Rejected": 0, "Pending": 0}
+    for status, count in status_totals:
+        if status in distribution:
+            distribution[status] = count
+    return distribution
+
+
+def _build_monthly_amounts(monthly_totals, start: date, end: date) -> list[dict]:
+    monthly_by_key = {
+        (int(year), int(month)): _as_float(amount)
+        for year, month, amount in monthly_totals
+    }
+    return [
+        {
+            "month": month.strftime("%Y-%m"),
+            "amount": monthly_by_key.get((month.year, month.month), 0.0),
+        }
+        for month in _monthly_buckets(start, end)
+    ]
+
+
+@router.get("/{id}/stats", response_model=SupplierStatsResponse)
+def get_supplier_stats(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _=Depends(RoleChecker(["Admin", "Approver"])),
+):
+    """Return server-aggregated invoice statistics for one supplier."""
+    supplier = db.query(Supplier).filter(Supplier.id == id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    start, end = _trailing_year_window(date.today())
+    date_filter = (Invoice.date >= start, Invoice.date < end)
+    supplier_filter = (Invoice.supplier_id == id, *date_filter)
+
+    total_invoices, total_amount, average_amount = db.query(
+        func.count(Invoice.id),
+        func.coalesce(func.sum(Invoice.total_amount), 0),
+        func.avg(Invoice.total_amount),
+    ).filter(*supplier_filter).one()
+
+    grand_total = db.query(
+        func.coalesce(func.sum(Invoice.total_amount), 0)
+    ).filter(*date_filter).scalar()
+
+    month_year = extract("year", Invoice.date).label("year")
+    month_number = extract("month", Invoice.date).label("month")
+    monthly_totals = db.query(
+        month_year,
+        month_number,
+        func.coalesce(func.sum(Invoice.total_amount), 0),
+    ).filter(*supplier_filter).group_by(month_year, month_number).all()
+    monthly_amounts = _build_monthly_amounts(monthly_totals, start, end)
+
+    top_line_items = db.query(
+        LineItem.description,
+        func.sum(LineItem.total_price).label("total_amount"),
+        func.count(distinct(LineItem.invoice_id)).label("invoice_count"),
+    ).join(Invoice, LineItem.invoice_id == Invoice.id).filter(
+        *supplier_filter,
+        LineItem.description.isnot(None),
+    ).group_by(
+        LineItem.description
+    ).order_by(
+        func.sum(LineItem.total_price).desc(),
+        LineItem.description.asc(),
+    ).limit(10).all()
+
+    status_totals = db.query(
+        Invoice.status,
+        func.count(Invoice.id),
+    ).filter(*supplier_filter).group_by(Invoice.status).all()
+    status_distribution = _status_distribution(status_totals)
+
+    top_invoice = db.query(Invoice).filter(*supplier_filter).order_by(
+        Invoice.total_amount.desc()
+    ).first()
+    currency_invoice = db.query(Invoice.currency).filter(
+        *supplier_filter
+    ).order_by(Invoice.date.desc()).first()
+    currency = currency_invoice[0] if currency_invoice else "USD"
+    grand_total_float = _as_float(grand_total)
+    total_amount_float = _as_float(total_amount)
+
+    return SupplierStatsResponse(
+        supplierName=supplier.name,
+        taxId=supplier.tax_id,
+        totalInvoices=total_invoices,
+        totalAmount=total_amount_float,
+        currency=currency,
+        monthlyAmounts=monthly_amounts,
+        annualAccumulated=total_amount_float,
+        annualPercentage=(total_amount_float / grand_total_float * 100)
+        if grand_total_float
+        else 0.0,
+        grandTotalAllSuppliers=grand_total_float,
+        topLineItems=[
+            {
+                "description": description,
+                "totalAmount": _as_float(total),
+                "invoiceCount": invoice_count,
+            }
+            for description, total, invoice_count in top_line_items
+        ],
+        statusDistribution=status_distribution,
+        averageInvoiceAmount=_as_float(average_amount),
+        topInvoice=(
+            {"number": top_invoice.invoice_number, "amount": _as_float(top_invoice.total_amount)}
+            if top_invoice
+            else None
+        ),
+    )
 
 @router.post("", response_model=SupplierResponse)
 def create_supplier(

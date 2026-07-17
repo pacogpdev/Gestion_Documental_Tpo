@@ -4,6 +4,12 @@ import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
 import Suppliers from './Suppliers';
 import { suppliersHandlers, mockSuppliers } from './Suppliers.handlers';
+import { useLocation } from 'react-router-dom';
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="current-location">{location.pathname}</output>;
+};
 
 describe('Suppliers', () => {
   beforeEach(() => {
@@ -245,6 +251,77 @@ describe('Suppliers', () => {
           'Cannot delete supplier: 2 invoice(s) associated. Delete the invoices first.',
         );
       });
+    });
+  });
+
+  describe('3.6 — Supplier statistics dashboard action', () => {
+    it.each([
+      ['Admin', 'admin@test.com'],
+      ['Approver', 'approver@test.com'],
+    ])('shows a chart action for %s users', async (role, email) => {
+      server.use(...suppliersHandlers);
+
+      render(<Suppliers />, {
+        user: { email, fullName: `${role} User`, roles: [role] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+
+      expect(screen.getByTestId('stats-btn-sup-001')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'View statistics for Acme Corp' })).toBeInTheDocument();
+    });
+
+    it('does not expose the dashboard page content to Viewer users', async () => {
+      server.use(...suppliersHandlers);
+
+      render(<Suppliers />, {
+        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+      expect(screen.queryByTestId('stats-btn-sup-001')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['Clerk', 'clerk@test.com'],
+      ['Viewer', 'viewer@test.com'],
+    ])('hides chart actions for %s users', async (role, email) => {
+      server.use(...suppliersHandlers);
+
+      render(<Suppliers />, {
+        user: { email, fullName: `${role} User`, roles: [role] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+
+      expect(screen.queryByTestId('stats-btn-sup-001')).not.toBeInTheDocument();
+    });
+
+    it('navigates to the selected supplier dashboard', async () => {
+      server.use(...suppliersHandlers);
+
+      render(
+        <>
+          <Suppliers />
+          <LocationProbe />
+        </>,
+        {
+          user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+          token: 'fake-jwt-token',
+          route: '/suppliers',
+        },
+      );
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('stats-btn-sup-001'));
+
+      expect(screen.getByTestId('current-location')).toHaveTextContent('/suppliers/sup-001/dashboard');
     });
   });
 });

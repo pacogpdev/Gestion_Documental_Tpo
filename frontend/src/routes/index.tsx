@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import UploadInvoice from '../pages/UploadInvoice';
 import Suppliers from '../pages/Suppliers';
 import ApprovalDashboard from '../pages/ApprovalDashboard';
+import SupplierDashboard from '../pages/SupplierDashboard';
 
 const AppRoutes: React.FC = () => {
   return (
@@ -16,6 +17,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/dashboard" element={<ApprovalDashboard />} />
             <Route path="/upload" element={<UploadInvoice />} />
             <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/suppliers/:id/dashboard" element={<SupplierDashboard />} />
             <Route path="*" element={<div className="text-center p-10 text-slate-500">Page not found</div>} />
           </Routes>
         </main>

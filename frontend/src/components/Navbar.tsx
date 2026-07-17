@@ -34,7 +34,7 @@ const Navbar: React.FC = () => {
              <Link to="/upload" className="hover:text-blue-300 transition-colors">Upload Invoice</Link>
            )}
            
-           {hasRole('Admin') && (
+           {(hasRole('Approver') || hasRole('Admin')) && (
              <Link to="/suppliers" className="hover:text-blue-300 transition-colors">Suppliers</Link>
            )}
         </div>

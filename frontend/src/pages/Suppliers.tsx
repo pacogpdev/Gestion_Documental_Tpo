@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface Supplier {
   id: string;
@@ -12,6 +13,7 @@ interface Supplier {
 
 const Suppliers: React.FC = () => {
   const { hasRole } = useAuth();
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
@@ -184,28 +186,45 @@ const Suppliers: React.FC = () => {
                 <td className="p-4 text-slate-600">{s.taxId}</td>
                 <td className="p-4 text-slate-600">{s.email}</td>
                 <td className="p-4 text-right">
-                  {hasRole('Admin') && (
+                  {(hasRole('Admin') || hasRole('Approver')) && (
                     <div className="flex items-center justify-end gap-3">
                       <button
-                        onClick={() => handleEdit(s)}
-                        className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                        data-testid={`stats-btn-${s.id}`}
+                        onClick={() => navigate(`/suppliers/${s.id}/dashboard`)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="View supplier statistics"
+                        aria-label={`View statistics for ${s.name}`}
                       >
-                        Edit
-                      </button>
-                      <button
-                        data-testid={`delete-supplier-btn-${s.id}`}
-                        onClick={() => handleDelete(s)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete supplier"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="4" y="12" width="3" height="8" />
+                          <rect x="10.5" y="8" width="3" height="12" />
+                          <rect x="17" y="4" width="3" height="16" />
                         </svg>
                       </button>
+                      {hasRole('Admin') && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(s)}
+                            className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            data-testid={`delete-supplier-btn-${s.id}`}
+                            onClick={() => handleDelete(s)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete supplier"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </td>
