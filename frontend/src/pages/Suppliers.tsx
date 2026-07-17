@@ -185,7 +185,7 @@ const Suppliers: React.FC = () => {
                 <td className="p-4 text-slate-600">{s.email}</td>
                 <td className="p-4 text-right">
                   {hasRole('Admin') && (
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-3">
                       <button
                         onClick={() => handleEdit(s)}
                         className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
