@@ -7,9 +7,9 @@ Sistema de extracción automatizada de datos de facturas mediante IA, con flujo 
 | Capa | Tecnología |
 |------|-----------|
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, SQLite (dev) / Azure SQL Server (prod) |
-| **Frontend** | Vite 5, React 18, TypeScript, Tailwind CSS 3 |
+| **Frontend** | Vite 5, React 18, TypeScript, Tailwind CSS 3, Recharts 3 |
 | **IA** | Azure AI Content Understanding SDK |
-| **Storage** | Azure Blob Storage (persistencia de PDFs de facturas) |
+| **Storage** | Azure Blob Storage (persistencia de PDFs de facturas, SAS tokens) |
 | **Auth** | Azure Entra ID (JWT) con bypass en desarrollo |
 | **Testing** | Vitest + React Testing Library + MSW (frontend), pytest (backend) |
 
@@ -65,10 +65,10 @@ Frontend disponible en `http://localhost:5173`.
 ### Tests
 
 ```powershell
-# Frontend (31 tests)
+# Frontend (49 tests)
 cd frontend && npx vitest run
 
-# Backend (71 tests)
+# Backend (86 tests)
 cd backend && pytest -v
 ```
 
@@ -100,7 +100,9 @@ cd backend && pytest -v
 │   │   ├── pages/               # Páginas + tests + handlers colocalizados
 │   │   │   ├── ApprovalDashboard.tsx
 │   │   │   ├── UploadInvoice.tsx
-│   │   │   └── Suppliers.tsx
+│   │   │   ├── Suppliers.tsx
+│   │   │   └── SupplierDashboard.tsx  # Dashboard de estadísticas con Recharts
+│   │   ├── routes/              # Route definitions
 │   │   ├── test-utils.tsx       # Render personalizado con MemoryRouter
 │   │   ├── index.css            # Tailwind directives
 │   │   └── main.tsx             # Entry point
@@ -133,6 +135,9 @@ cd backend && pytest -v
 | `DELETE /api/invoices/{id}` | Eliminar factura, line items y PDF asociado en Azure Blob Storage | Clerk, Admin |
 | `GET /api/suppliers` | Listar proveedores | Todos |
 | `POST /api/suppliers` | Crear nuevo proveedor | Admin |
+| `PUT /api/suppliers/{id}` | Actualizar datos de un proveedor | Admin |
+| `DELETE /api/suppliers/{id}` | Eliminar proveedor (solo si no tiene facturas asociadas) | Admin |
+| `GET /api/suppliers/{id}/stats` | Estadísticas del proveedor (facturación mensual, % total, top items, estados) | Admin, Approver |
 | `GET /api/users/me` | Obtener perfil del usuario autenticado | Todos |
 
 ### Frontend (React)
@@ -141,7 +146,8 @@ cd backend && pytest -v
 |--------|-------------|--------|
 | **Approval Dashboard** (`/dashboard`) | Lista de facturas con filtros por estado, búsqueda, ordenamiento por fecha/importe, paginación (15/page), icono de visualización de PDF, acciones de aprobar/rechazar/eliminar | Admin, Approver |
 | **Upload Invoice** (`/upload`) | Subir PDF para extracción automática con revisión de datos extraídos | Admin, Approver |
-| **Suppliers** (`/suppliers`) | Gestión de proveedores con búsqueda y filtro | Admin |
+| **Suppliers** (`/suppliers`) | Gestión de proveedores con búsqueda, filtro, editar, eliminar (con validación de facturas) y acceso al dashboard de estadísticas | Admin |
+| **Supplier Dashboard** (`/suppliers/:id/dashboard`) | Dashboard de estadísticas por proveedor: KPIs (total anual, % del total, promedio, top factura), facturación mensual (AreaChart), share del proveedor (Donut), distribución por estado (Pie), top 10 items más facturados (BarChart) | Admin, Approver |
 
 ### Lógica de Negocio
 
@@ -157,6 +163,9 @@ cd backend && pytest -v
 - **Estados**: `Pending` → `Approved` / `Rejected`. Upload siempre guarda como Pending
 - **Paginación**: 15 facturas por página con controles superior e inferior
 - **Ordenamiento**: Por fecha y por importe, ascendente/descendente, indicadores siempre visibles
+- **Eliminación de proveedor con validación**: `DELETE /api/suppliers/{id}` verifica que el proveedor no tenga facturas asociadas (409 si las tiene). Solo Admin
+- **Dashboard de estadísticas por proveedor**: `GET /api/suppliers/{id}/stats` devuelve facturación mensual (trailing 12 meses), % del total facturado, top 10 items por importe, distribución por estado, promedio por factura y top factura. Frontend con Recharts (gráficos de área, donut, pie y barras)
+- **Formateo de moneda dinámico**: los importes se muestran con el símbolo de la moneda real del proveedor (EUR, USD, GBP) extraído del API, no hardcodeado
 
 ## Usuarios y Roles
 
