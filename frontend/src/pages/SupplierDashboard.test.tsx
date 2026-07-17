@@ -38,9 +38,9 @@ describe('SupplierDashboard', () => {
       route: '/suppliers/sup-001/dashboard',
     });
 
-    expect(screen.getByTestId('dashboard-loading')).toHaveTextContent('Loading...');
+    expect(screen.getByTestId('dashboard-loading')).toHaveTextContent('Loading supplier statistics');
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument());
 
     expect(screen.getByText(/TAX-12345/)).toBeInTheDocument();
     expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('12,000');
@@ -80,7 +80,7 @@ describe('SupplierDashboard', () => {
       route: '/suppliers/sup-002/dashboard',
     });
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Globex Inc Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Globex Inc' })).toBeInTheDocument());
 
     expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('15,000');
     expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('30%');
@@ -165,7 +165,7 @@ describe('SupplierDashboard', () => {
       },
     );
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp Dashboard' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Back to Suppliers' }));
 
     expect(screen.getByTestId('current-location')).toHaveTextContent('/suppliers');

@@ -25,7 +25,7 @@ describe('application routes', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Acme Corp Dashboard' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,5 @@
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:32fd26f262cb5d43d497a0697805141ea60da75de9c13567a3921e69dfb67ea2
+evidence_revision: sha256:26b4662a0a29ef2164ef2ac5b56e20db26bdd4a6cbbf108918ac16f0b99b1f2a
 verdict: pass
 blockers: 0
 critical_findings: 0
@@ -7,20 +7,33 @@ requirements: 7/7
 scenarios: 13/14
 test_command: cd backend && pytest
 test_exit_code: 0
-test_output_hash: sha256:42d71ac32aed6fcf42b59e66e4307397f7b6eb6135c5851409b740a6441324c9
+test_output_hash: sha256:01f746aafe42e22e2f12539624fd7a7a62be6425690dfa8f3f3a160034c142c3
+frontend_test_command: cd frontend && npx vitest run
+frontend_test_exit_code: 0
+frontend_test_output_hash: sha256:5194cf8917b3fde20dc09fd0693a230fef417db4bc4282adb5a2cf6487e46bc1
 build_command: cd frontend && npm run build
 build_exit_code: 0
-build_output_hash: sha256:5f4b7db90340f204b4e1d9c10f63e6d8f956d635a6fb98c17988a8917fd51da5
+build_output_hash: sha256:60e799de956aa9d1411c619263769541edfbd4a7d3550f1ca47fe6ba84d5b28d
 
 ## Verification Report
 
 **Change**: supplier-stats-dashboard  
 **Mode**: Strict TDD  
-**Artifact completeness**: Specs, design, and tasks are present. The native status reports `proposal.md` and a separate `apply-progress` artifact as missing; TDD evidence is embedded in `tasks.md` and was verified there. Proposal coherence and native final-verification readiness were therefore not claimable.
+**Status**: `partial` — runtime verification passed; artifact and quality warnings remain.
 
 ### Executive Summary
 
-The implementation satisfies all seven requirements at runtime, and all 11 implementation tasks are checked complete. Backend tests passed (86/86), frontend tests passed (49/49), and the frontend production build passed. The result is **PASS WITH WARNINGS** because one chart-data scenario is only partially asserted, the implementation deviates from two explicit layout/contract details in the design, and mypy reports one changed-file error.
+The implementation conforms to all seven requirements, all 11 implementation tasks are checked complete, and every one of the 14 specification scenarios has a passing covering test. The backend suite passed 86/86, the frontend suite passed 49/49, and the production build passed. The verdict is **PASS WITH WARNINGS** because the chart scenario assertions do not independently verify rendered dataset values, the canonical API field names differ from the design example, mypy reports one changed-file error, and the native proposal/apply-progress artifacts are missing.
+
+### Artifact Completeness
+
+| Artifact | Status | Notes |
+|---|---|---|
+| Proposal | ❌ Missing | Native status reports `proposal.md` absent; proposal coherence is not claimable. |
+| Specs | ✅ Complete | Two spec files retrieved and verified. |
+| Design | ✅ Complete | `design.md` retrieved and verified. |
+| Tasks | ✅ Complete | All 11 implementation tasks are checked `[x]`. |
+| Apply progress | ⚠️ Missing as separate artifact | TDD Cycle Evidence tables are embedded in `tasks.md`; no separate native apply-progress file exists. |
 
 ### Completeness
 
@@ -30,20 +43,20 @@ The implementation satisfies all seven requirements at runtime, and all 11 imple
 | Tasks complete | 11 |
 | Tasks incomplete | 0 |
 | Requirements | 7/7 implemented |
-| Scenarios with a covering runtime test | 14/14 |
+| Scenarios with a passing covering test | 14/14 |
 | Scenarios fully asserted | 13/14 |
 
 ### Build & Tests Execution
 
 | Command | Result | Evidence |
 |---|---|---|
-| `cd backend && pytest` | ✅ 86 passed, 0 failed | Exit 0; `sha256:42d71ac32aed6fcf42b59e66e4307397f7b6eb6135c5851409b740a6441324c9` |
-| `cd frontend && npx vitest run` | ✅ 49 passed across 8 files, 0 failed | Exit 0; `sha256:d0a8434ce30b8598d8e4311ef3267f76eb221fb62150dbd004ce4a56e3d50197` |
-| `cd frontend && npm run build` | ✅ Production build passed | Exit 0; `sha256:5f4b7db90340f204b4e1d9c10f63e6d8f956d635a6fb98c17988a8917fd51da5` |
+| `cd backend && pytest` | ✅ 86 passed, 0 failed | Exit 0; `sha256:01f746aafe42e22e2f12539624fd7a7a62be6425690dfa8f3f3a160034c142c3` |
+| `cd frontend && npx vitest run` | ✅ 49 passed across 8 files, 0 failed | Exit 0; `sha256:5194cf8917b3fde20dc09fd0693a230fef417db4bc4282adb5a2cf6487e46bc1` |
+| `cd frontend && npm run build` | ✅ Production build passed | Exit 0; `sha256:60e799de956aa9d1411c619263769541edfbd4a7d3550f1ca47fe6ba84d5b28d` |
 
-The frontend build emits the existing Recharts-related chunk-size warning (`651.38 kB` minified). Vitest emits React Router future-flag warnings and expected error-path logging, but no test failures.
+Backend output collected 86 passing tests, including 11 supplier-stat tests. Frontend output collected 49 passing tests across 8 files, including 7 dashboard, 15 supplier, 1 route, and 1 Navbar test. The build emitted a Recharts bundle-size warning: 654.50 kB minified, above Vite's 500 kB advisory threshold. Vitest also emitted existing React Router future-flag warnings and expected error-path logging; none caused a failure.
 
-Coverage analysis skipped: no configured pytest-cov or Vitest coverage provider was detected.
+**Coverage**: Not available. No configured pytest-cov or Vitest coverage provider was detected.
 
 ### Spec Compliance Matrix
 
@@ -59,9 +72,9 @@ Coverage analysis skipped: no configured pytest-cov or Vitest coverage provider 
 | Dashboard: Stats Icon | Icon visible for Admin and Approver | `frontend/src/pages/Suppliers.test.tsx > shows a chart action for Admin/Approver users` | ✅ COMPLIANT |
 | Dashboard: Stats Icon | Icon hidden for Clerk and Viewer | `frontend/src/pages/Suppliers.test.tsx > hides chart actions for Clerk/Viewer users` | ✅ COMPLIANT |
 | Dashboard: Charts and KPIs | Click opens the supplier dashboard | `frontend/src/pages/Suppliers.test.tsx > navigates to the selected supplier dashboard` | ✅ COMPLIANT |
-| Dashboard: Charts and KPIs | Charts render with data | `frontend/src/pages/SupplierDashboard.test.tsx > loads supplier stats and renders ... chart labels` | ⚠️ PARTIAL — chart regions/labels are asserted, but rendered dataset values are not independently asserted |
-| Dashboard: Charts and KPIs | KPIs show correct values | `frontend/src/pages/SupplierDashboard.test.tsx > loads supplier stats and renders ... KPI values` | ✅ COMPLIANT |
-| Dashboard: Charts and KPIs | Empty statistics render safely | `frontend/src/pages/SupplierDashboard.test.tsx > renders zero KPIs and labelled empty chart states ...` | ✅ COMPLIANT |
+| Dashboard: Charts and KPIs | Charts render with data | `frontend/src/pages/SupplierDashboard.test.tsx > loads supplier stats and renders the supplier identity, KPI values, and chart labels` | ⚠️ PARTIAL — chart regions and labels are asserted, but the rendered monthly, share, line-item, and status values are not independently asserted. |
+| Dashboard: Charts and KPIs | KPIs show correct values | `frontend/src/pages/SupplierDashboard.test.tsx > loads supplier stats and renders the supplier identity, KPI values, and chart labels` | ✅ COMPLIANT |
+| Dashboard: Charts and KPIs | Empty statistics render safely | `frontend/src/pages/SupplierDashboard.test.tsx > renders zero KPIs and labelled empty chart states for a supplier without invoices` | ✅ COMPLIANT |
 | Dashboard: Navigation | Back button works | `frontend/src/pages/SupplierDashboard.test.tsx > navigates back to the suppliers page` | ✅ COMPLIANT |
 
 **Compliance summary**: 13/14 scenarios fully compliant; all 14 have passing covering tests.
@@ -70,24 +83,25 @@ Coverage analysis skipped: no configured pytest-cov or Vitest coverage provider 
 
 | Requirement | Status | Notes |
 |---|---|---|
-| Trailing 12-month window | ✅ Implemented | One `[start, end)` calendar-month range is reused for supplier totals, grand total, monthly aggregation, line items, statuses, and top invoice. |
-| Supplier identity and metric response | ✅ Implemented | `SupplierStatsResponse` returns supplier identity, counts, totals, monthly values, percentage, aggregate line items, statuses, average, and nullable top invoice. |
-| Zero-safe behavior | ✅ Implemented | Empty aggregates become zero, all 12 monthly buckets are emitted, status keys are prefilled, and top invoice/items are empty/null. |
-| Percentage calculation | ✅ Implemented | Supplier total divided by all-supplier trailing-window total; zero grand total returns `0.0`. |
-| Top-ten line-item aggregation | ✅ Implemented | Descriptions are grouped, summed, counted by distinct invoice, sorted descending, and limited to ten. |
-| Role access | ✅ Implemented | Backend uses `RoleChecker(["Admin", "Approver"])`; UI gates both table action and dashboard content. |
-| Dashboard behavior | ✅ Implemented | Four Recharts regions, KPI cards, loading/error/empty states, accessible back action, route, and role-aware supplier action are present. |
+| Supplier stats response | ✅ Implemented | `GET /api/suppliers/{id}/stats` returns supplier identity, invoice count, totals, 12 monthly values, percentage, grand total, top items, statuses, average, and nullable top invoice. |
+| Trailing 12-month reporting window | ✅ Implemented | One `[start, end)` calendar-month range is reused for supplier totals, grand total, monthly aggregation, line items, statuses, and top invoice. |
+| Zero-safe behavior | ✅ Implemented | Empty aggregates become zero, twelve monthly buckets are emitted, status keys are prefilled, and top invoice/items are empty or null. |
+| Annual percentage | ✅ Implemented | Supplier total is divided by the all-supplier trailing-window total; zero grand total returns `0.0`. |
+| Top-ten line-item aggregation | ✅ Implemented | Descriptions are grouped and summed, invoice counts use distinct invoices, results sort descending, and the query limits to ten. |
+| Access control | ✅ Implemented | Backend uses `RoleChecker(["Admin", "Approver"])`; the table action and dashboard content are UI-gated for the same roles. |
+| Dashboard behavior | ✅ Implemented | Route, loading spinner, error state, five KPI cards including Top Invoice, four Recharts regions, gradient area chart, percentage labels, status counts, truncated item labels with amount labels, and accessible Back action are present. |
 
 ### Design Coherence
 
 | Decision | Followed? | Notes |
 |---|---|---|
-| Server-side SQLAlchemy aggregation | ✅ Yes | Aggregations remain in `backend/app/api/endpoints/suppliers.py`; the frontend consumes API totals. |
+| Server-side SQLAlchemy aggregation | ✅ Yes | Aggregations remain in `backend/app/api/endpoints/suppliers.py`; the frontend consumes API totals rather than aggregating invoices. |
 | Cross-dialect month grouping | ✅ Yes | Date range filtering plus SQLAlchemy `extract` and Python zero-fill are used. |
-| Defense-in-depth role access | ✅ Yes | API and UI both enforce Admin/Approver access. |
-| Response model contract | ⚠️ Partial | The design JSON names fields `annualTotal`, `grandTotal`, and `topInvoice.invoiceNumber`; the backend model emits `annualAccumulated`, `grandTotalAllSuppliers`, and `topInvoice.number`. The frontend normalization supports both, but the canonical API contract is not identical to the design example. |
-| Recharts layout | ⚠️ Partial | Recharts chart types and responsive containers match, but the design calls for full-width monthly and line-item charts; the implementation places all four chart cards in one two-column grid. |
-| Zero-data presentation | ✅ Yes | Monthly and line-item charts use labelled empty states; percentage/status charts render zero-safe distributions. |
+| Defense-in-depth role access | ✅ Yes | API and UI both enforce Admin/Approver access, and Approvers receive Suppliers navigation. |
+| Response model contract | ⚠️ Partial | The design example names `annualTotal`, `grandTotal`, and `topInvoice.invoiceNumber`; the backend model emits `annualAccumulated`, `grandTotalAllSuppliers`, and `topInvoice.number`. Frontend normalization supports both, but the canonical API contract is not identical to the design example. |
+| Recharts layout | ✅ Yes | Monthly and top-item charts are full-width; supplier-share and status charts are side-by-side; all use responsive containers. |
+| Visual presentation improvements | ✅ Yes | KPI accents and fifth Top Invoice card, gradient area chart, percentage labels, status counts, truncated descriptions, bar amount labels, header badges, spinner, and bold arrow are implemented. |
+| Empty-state presentation | ✅ Yes | Monthly and line-item data use labelled empty states; share/status charts remain zero-safe without throwing. |
 
 ### Task Completion
 
@@ -97,65 +111,69 @@ All 11 tasks in `tasks.md` are checked `[x]`: 1.1, 1.2, 2.1–2.3, 3.1–3.3, an
 
 | Check | Result | Details |
 |---|---|---|
-| TDD evidence reported | ⚠️ | Two TDD Cycle Evidence tables are present in `tasks.md`; no separate native `apply-progress` artifact exists. |
+| TDD evidence reported | ⚠️ | Two TDD Cycle Evidence tables are present in `tasks.md`; the native status has no separate apply-progress artifact. |
 | All tasks have tests | ✅ | 11/11 task rows list an existing test file. |
 | RED confirmed | ✅ | 11/11 task rows report tests written before implementation, and all listed files exist. |
 | GREEN confirmed | ✅ | 11/11 task rows correspond to currently passing test files. |
-| Triangulation adequate | ✅ | The evidence reports distinct boundary, role, aggregation, empty, error, and navigation cases; runtime suites pass. |
-| Safety net for modified/new files | ✅ | Existing-file safety nets are reported; `N/A (new)` entries correspond to files verified as newly created. |
+| Triangulation adequate | ✅ | Evidence covers window boundaries, zero-fill, aggregation, roles, empty/error paths, chart regions, and navigation; runtime suites pass. |
+| Safety net for modified/new files | ✅ | Existing-file safety nets are reported; `N/A (new)` entries correspond to newly created test/source files. |
 
-**TDD Compliance**: 5/6 checks fully evidenced; the only qualification is the missing separate apply-progress artifact.
+**TDD Compliance**: 5/6 checks fully evidenced; the qualification is the missing separate apply-progress artifact.
 
 ### Test Layer Distribution
 
 | Layer | Tests | Files | Tools |
 |---|---:|---:|---|
 | Unit | 0 | 0 | — |
-| Integration/component | 35 in the related modified files | 5 | pytest/TestClient; Vitest, React Testing Library, MSW |
+| Integration/component | 35 related-file tests | 5 | pytest/TestClient; Vitest, React Testing Library, MSW |
 | E2E | 0 | 0 | — |
-| **Total related-file tests** | **35** | **5** | |
+| **Total** | **35** | **5** | |
 
-The change-specific focused set is 11 backend cases plus 15 frontend cases; the 35-file total includes pre-existing tests in modified `Suppliers.test.tsx`.
+The change-specific focused set is 11 backend cases plus 15 frontend supplier cases, 7 dashboard cases, 1 route case, and 1 Navbar case. No browser E2E suite is part of this change.
 
 ### Changed File Coverage
 
-Coverage analysis skipped — no coverage tool detected. Runtime tests and the production build passed.
+Coverage analysis skipped — no coverage tool/provider was detected. Per-file line and branch coverage cannot be reported.
 
 ### Assertion Quality
 
-No tautologies, ghost loops, assertion-only tests, unguarded empty assertions, or smoke-test-only cases were found in the related test files. The assertions verify response values, rendered behavior, role visibility, navigation, error handling, and empty states.
+| File | Line | Assertion | Issue | Severity |
+|---|---:|---|---|---|
+| `frontend/src/pages/Suppliers.test.tsx` | 219 | `expect(deleteSupplier).toHaveBeenCalledTimes(1)` | Implementation-detail mock call-count assertion in pre-existing test code. | WARNING |
 
-One low-impact implementation-detail assertion is present in the pre-existing portion of `frontend/src/pages/Suppliers.test.tsx` (`expect(deleteSupplier).toHaveBeenCalledTimes(1)`, line 219); it is a warning under the strict audit rule, not a supplier-stats coverage failure.
+No tautologies, ghost loops, assertion-only tests, unguarded empty assertions, or smoke-test-only cases were found in the related test files.
 
 **Assertion quality**: 0 CRITICAL, 1 WARNING.
 
 ### Quality Metrics
 
 **Linter**: ➖ Not available (`ruff` is not installed; no frontend lint script/config was detected).  
-**Type checker**: ⚠️ `mypy app` reports one changed-file error at `backend/app/api/endpoints/suppliers.py:158`: the top-line-item list comprehension is inferred as `List[dict[str, Any]]` but expected as `List[TopLineItem]`.  
-**Frontend type check**: ➖ No `tsconfig.json` is present; `npx tsc --noEmit` cannot run project type checking. Vite production build passes.
+**Backend type checker**: ⚠️ `mypy app` failed with one changed-file error at `backend/app/api/endpoints/suppliers.py:158`: the top-line-item list comprehension is inferred as `List[dict[str, Any]]` but expected as `List[TopLineItem]`. Output hash: `sha256:5e4cf0c77b40950e38fab96f5099755ee1e490cd60140be82878ac3c1a76f725`.
+**Frontend type checker**: ➖ TypeScript is installed, but no `frontend/tsconfig.json` exists, so project type checking is not configured. The Vite production build passed.
 
 ### Issues Found
 
-**CRITICAL**: None.  
+**CRITICAL**: None.
+
 **WARNING**:
 
-1. `SupplierDashboard.test.tsx` does not assert the actual monthly, percentage, line-item, and status dataset values rendered by Recharts; the charts scenario is therefore PARTIAL despite the implementation wiring the datasets correctly.
-2. Backend response field names differ from the explicit design example (`annualAccumulated` vs `annualTotal`, `grandTotalAllSuppliers` vs `grandTotal`, `topInvoice.number` vs `topInvoice.invoiceNumber`). Frontend aliases mask the mismatch, but the API contract should be made canonical.
-3. Dashboard layout does not follow the design's full-width monthly and line-item chart arrangement; all four charts are in the same two-column grid.
-4. `mypy app` reports the changed-file type error at `backend/app/api/endpoints/suppliers.py:158`.
-5. The separate native `apply-progress` artifact and proposal are missing; TDD evidence is embedded in `tasks.md`, so no runtime verification was blocked, but native archive readiness remains unavailable.
-6. Existing frontend test assertion at `frontend/src/pages/Suppliers.test.tsx:219` checks a mock call count, coupling the test to implementation details.
+1. The dashboard chart scenario is only PARTIAL: `SupplierDashboard.test.tsx` asserts chart regions and labels but not the actual datasets rendered by Recharts.
+2. Backend field names differ from the explicit design example (`annualAccumulated` vs `annualTotal`, `grandTotalAllSuppliers` vs `grandTotal`, and `topInvoice.number` vs `topInvoice.invoiceNumber`). Frontend aliases mask the mismatch, but the API contract should be canonicalized.
+3. `mypy app` reports one changed-file type error at `backend/app/api/endpoints/suppliers.py:158`.
+4. The separate native `apply-progress` artifact and proposal are missing. TDD evidence is embedded in `tasks.md`, so runtime verification was possible, but native final-verification/archive readiness remains unavailable.
+5. The existing frontend test assertion at `frontend/src/pages/Suppliers.test.tsx:219` couples a test to a mock call count.
+6. Vite reports a 654.50 kB minified frontend chunk, primarily due to the Recharts bundle.
 
 **SUGGESTION**:
 
-1. Add Recharts-level assertions or a chart-data adapter test that verifies the four datasets' values, not only their labels.
-2. Choose one canonical API field naming scheme and update the Pydantic contract, fixture, and frontend normalization accordingly.
-3. Add a frontend TypeScript project configuration and a lint command so changed-file quality checks can run in CI.
-4. Consider code-splitting Recharts to address the production chunk-size warning.
+1. Add Recharts-level assertions or a chart-data adapter test that verifies monthly, share, line-item, and status dataset values.
+2. Choose one canonical API field naming scheme and update the Pydantic contract, fixtures, and frontend normalization together.
+3. Fix the `TopLineItem` annotation/inference error and add a frontend TypeScript project configuration plus lint command for CI.
+4. Consider code-splitting Recharts with a dynamic import or manual chunk configuration.
+5. Restore the missing proposal and separate apply-progress artifacts before archive routing.
 
 ### Verdict
 
-**PASS WITH WARNINGS** — all requirements are implemented, all tasks are complete, and both requested test suites plus the frontend build pass. Address the contract/layout/type-quality warnings and restore missing planning artifacts before treating the change as fully archive-ready.
+**PASS WITH WARNINGS** — all requirements, tasks, requested test suites, and the production build pass. Remaining findings are test-assertion completeness, contract/design coherence, missing SDD artifacts, and non-blocking quality/tooling warnings.
 
-next_recommended: propose (restore missing proposal artifact), then re-run verify/archive routing
+`next_recommended`: `propose` — restore the missing proposal and apply-progress artifacts, then rerun native verify/archive routing.
