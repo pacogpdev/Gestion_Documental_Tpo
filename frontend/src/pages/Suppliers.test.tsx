@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
@@ -8,6 +8,10 @@ import { suppliersHandlers, mockSuppliers } from './Suppliers.handlers';
 describe('Suppliers', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('3.2 — Supplier list renders on mount', () => {
@@ -155,6 +159,91 @@ describe('Suppliers', () => {
 
       await waitFor(() => {
         expect(screen.getByText('No suppliers found.')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('3.5 — Admin supplier deletion', () => {
+    it('renders a delete button for Admin users', async () => {
+      server.use(...suppliersHandlers);
+
+      render(<Suppliers />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('delete-supplier-btn-sup-001')).toBeInTheDocument();
+    });
+
+    it('calls the delete API and removes the supplier from the list', async () => {
+      let currentSuppliers = [...mockSuppliers];
+      const deleteSupplier = vi.fn((request: Request) => {
+        const supplierId = request.url.split('/').pop();
+        currentSuppliers = currentSuppliers.filter((supplier) => supplier.id !== supplierId);
+        return HttpResponse.json({ status: 'success', deleted_id: supplierId });
+      });
+
+      server.use(
+        http.get('http://localhost:8000/api/suppliers', () => HttpResponse.json(currentSuppliers)),
+        http.delete('http://localhost:8000/api/suppliers/:id', ({ request }) => {
+          const response = deleteSupplier(request);
+          return response;
+        }),
+      );
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      render(<Suppliers />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('delete-supplier-btn-sup-001'));
+
+      await waitFor(() => {
+        expect(deleteSupplier).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows the API detail when deletion returns 409 Conflict', async () => {
+      server.use(
+        ...suppliersHandlers,
+        http.delete('http://localhost:8000/api/suppliers/:id', () =>
+          HttpResponse.json(
+            { detail: 'Cannot delete supplier: 2 invoice(s) associated. Delete the invoices first.' },
+            { status: 409 },
+          ),
+        ),
+      );
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+
+      render(<Suppliers />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('delete-supplier-btn-sup-001'));
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Cannot delete supplier: 2 invoice(s) associated. Delete the invoices first.',
+        );
       });
     });
   });

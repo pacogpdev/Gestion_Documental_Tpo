@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.app.models.schemas import Supplier
+from backend.app.models.schemas import Invoice, Supplier
 from backend.app.core.database import get_db
-from backend.app.core.security import get_current_user
+from backend.app.core.security import get_current_user, RoleChecker
 import uuid
 from pydantic import BaseModel
 from typing import List, Optional
@@ -120,3 +120,30 @@ def list_suppliers(
         )
         for s in suppliers
     ]
+
+
+@router.delete("/{id}")
+def delete_supplier(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _ = Depends(RoleChecker(["Admin"])),
+):
+    """Deletes a supplier. Only allowed if no invoices are associated."""
+    supplier = db.query(Supplier).filter(Supplier.id == id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    invoice_count = db.query(Invoice).filter(Invoice.supplier_id == id).count()
+    if invoice_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete supplier: {invoice_count} invoice(s) associated. "
+                "Delete the invoices first."
+            ),
+        )
+
+    db.delete(supplier)
+    db.commit()
+    return {"status": "success", "deleted_id": str(id)}

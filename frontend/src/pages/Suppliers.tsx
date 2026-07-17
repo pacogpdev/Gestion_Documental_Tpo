@@ -64,6 +64,17 @@ const Suppliers: React.FC = () => {
     }
   };
 
+  const handleDelete = async (supplier: Supplier) => {
+    if (!window.confirm(`Are you sure you want to delete supplier "${supplier.name}"?`)) return;
+    try {
+      await apiClient.delete(`/suppliers/${supplier.id}`);
+      fetchSuppliers();
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || 'Error deleting supplier';
+      alert(detail);
+    }
+  };
+
   const filteredSuppliers = suppliers.filter((s) =>
     (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (s.taxId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -174,12 +185,28 @@ const Suppliers: React.FC = () => {
                 <td className="p-4 text-slate-600">{s.email}</td>
                 <td className="p-4 text-right">
                   {hasRole('Admin') && (
-                    <button
-                      onClick={() => handleEdit(s)}
-                      className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleEdit(s)}
+                        className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        data-testid={`delete-supplier-btn-${s.id}`}
+                        onClick={() => handleDelete(s)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete supplier"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
