@@ -8,7 +8,7 @@ class DatabaseManager:
     """Manages the SQLAlchemy engine and session factory.
     Allows swapping the engine for testing purposes.
     """
-    def __init__(self, db_url: str = None):
+    def __init__(self, db_url: str | None = None):
         self.db_url = settings.DATABASE_URL if db_url is None else db_url
         engine_options = {}
         if self.db_url.startswith("sqlite"):

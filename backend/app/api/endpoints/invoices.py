@@ -86,9 +86,17 @@ def _blob_name_from_url(blob_url: str, storage: BlobStorageService) -> str | Non
     return path[len(prefix):]
 
 
-def _cleanup_uploaded_blob(blob_url: str, storage: BlobStorageService) -> None:
+def _cleanup_uploaded_blob(
+    blob_url: str | None,
+    storage: BlobStorageService | None,
+) -> None:
     """Attempt Azure cleanup without masking the database exception being handled."""
-    if not blob_url or blob_url.startswith("/uploads/") or not blob_url.startswith("https://"):
+    if (
+        storage is None
+        or not blob_url
+        or blob_url.startswith("/uploads/")
+        or not blob_url.startswith("https://")
+    ):
         return
     try:
         blob_name = _blob_name_from_url(blob_url, storage)

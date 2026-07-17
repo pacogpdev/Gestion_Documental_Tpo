@@ -1,6 +1,6 @@
 import uuid
-from datetime import date, datetime
-from pydantic import BaseModel
+from datetime import date, datetime, timezone
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Column, String, ForeignKey, DateTime, Date, Numeric, Table, TypeDecorator, CHAR, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
@@ -75,7 +75,7 @@ class Invoice(Base):
     currency = Column(String(3), default="USD")
     status = Column(String(20), default="Pending") # Pending, Approved, Rejected
     file_url = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     supplier = relationship("Supplier", back_populates="invoices")
     line_items = relationship("LineItem", back_populates="invoice", cascade="all, delete-orphan")
@@ -110,7 +110,7 @@ class AuditLog(Base):
     action = Column(String(100), nullable=False)
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(GUID(), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class InvoiceResponse(BaseModel):
@@ -124,5 +124,4 @@ class InvoiceResponse(BaseModel):
     status: str
     fileUrl: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
