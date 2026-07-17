@@ -44,6 +44,7 @@ interface SupplierStats {
   annualTotal: number;
   annualPercentage: number;
   grandTotal: number;
+  currency: string;
   monthlyAmounts: MonthlyAmount[];
   topLineItems: TopLineItem[];
   statusDistribution: StatusDistribution;
@@ -61,6 +62,7 @@ interface SupplierStatsApiResponse {
   annualPercentage?: number;
   grandTotal?: number;
   grandTotalAllSuppliers?: number;
+  currency?: string;
   monthlyAmounts?: MonthlyAmount[];
   topLineItems?: TopLineItem[];
   statusDistribution?: StatusDistribution;
@@ -71,15 +73,16 @@ interface SupplierStatsApiResponse {
 const CHART_COLORS = ['#22c55e', '#ef4444', '#f59e0b'];
 const KPI_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e', '#ec4899'];
 
-const formatEuro = (amount: number) =>
-  `\u20AC${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+const CURRENCY_SYMBOLS: Record<string, string> = { EUR: '\u20AC', USD: '$', GBP: '\u00A3' };
 
-const formatAmount = (amount: number) =>
-  amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+const currencySymbol = (currency: string) => CURRENCY_SYMBOLS[currency] || currency + ' ';
 
-const formatCompactEuro = (value: number) => {
-  if (value >= 1000) return `\u20AC${(value / 1000).toFixed(0)}k`;
-  return `\u20AC${value.toFixed(0)}`;
+const formatMoney = (amount: number, currency: string) =>
+  `${currencySymbol(currency)}${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+
+const formatCompactMoney = (value: number, currency: string) => {
+  if (value >= 1000) return `${currencySymbol(currency)}${(value / 1000).toFixed(0)}k`;
+  return `${currencySymbol(currency)}${value.toFixed(0)}`;
 };
 
 const truncate = (text: string, max: number = 25) =>
@@ -92,6 +95,7 @@ const normalizeStats = (response: SupplierStatsApiResponse): SupplierStats => ({
   annualTotal: response.annualTotal ?? response.annualAccumulated ?? response.totalAmount ?? 0,
   annualPercentage: response.annualPercentage || 0,
   grandTotal: response.grandTotal ?? response.grandTotalAllSuppliers ?? 0,
+  currency: response.currency || 'EUR',
   monthlyAmounts: response.monthlyAmounts || [],
   topLineItems: response.topLineItems || [],
   statusDistribution: response.statusDistribution || { Approved: 0, Rejected: 0, Pending: 0 },
@@ -222,14 +226,14 @@ const SupplierDashboard: React.FC = () => {
 
       {/* KPI Cards with colored top border */}
       <section aria-label="Supplier KPIs" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard testId="kpi-annual-total" label="Annual total" value={formatEuro(stats.annualTotal)} accentColor={KPI_COLORS[0]} icon="\u20AC" />
-        <KpiCard testId="kpi-annual-percentage" label="Share of total" value={`${formatAmount(stats.annualPercentage)}%`} accentColor={KPI_COLORS[1]} icon="%" />
-        <KpiCard testId="kpi-average-invoice" label="Average invoice" value={formatEuro(stats.averageInvoiceAmount)} accentColor={KPI_COLORS[2]} icon="\u00F7" />
+        <KpiCard testId="kpi-annual-total" label="Annual total" value={formatMoney(stats.annualTotal, stats.currency)} accentColor={KPI_COLORS[0]} icon="\u20AC" />
+        <KpiCard testId="kpi-annual-percentage" label="Share of total" value={`${stats.annualPercentage.toFixed(1)}%`} accentColor={KPI_COLORS[1]} icon="%" />
+        <KpiCard testId="kpi-average-invoice" label="Average invoice" value={formatMoney(stats.averageInvoiceAmount, stats.currency)} accentColor={KPI_COLORS[2]} icon="\u00F7" />
         <KpiCard testId="kpi-invoice-count" label="Invoice count" value={`${stats.totalInvoices}`} accentColor={KPI_COLORS[3]} icon="#" />
         <KpiCard
           testId="kpi-top-invoice"
           label="Top invoice"
-          value={stats.topInvoice ? formatEuro(stats.topInvoice.amount) : '\u2014'}
+          value={stats.topInvoice ? formatMoney(stats.topInvoice.amount, stats.currency) : '\u2014'}
           subValue={stats.topInvoice?.invoiceNumber}
           accentColor={KPI_COLORS[4]}
           icon="\u2605"
@@ -251,8 +255,8 @@ const SupplierDashboard: React.FC = () => {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} />
-              <YAxis tickFormatter={formatCompactEuro} tick={{ fontSize: 12, fill: '#64748b' }} />
-              <Tooltip formatter={(value: number) => [formatEuro(value), 'Amount']} />
+              <YAxis tickFormatter={(v: number) => formatCompactMoney(v, stats.currency)} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <Tooltip formatter={(value: number) => [formatMoney(value, stats.currency), 'Amount']} />
               <Area type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} fill="url(#monthlyGradient)" name="Amount" />
             </AreaChart>
           </ResponsiveContainer>
@@ -319,7 +323,7 @@ const SupplierDashboard: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-              <XAxis type="number" tickFormatter={formatCompactEuro} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <XAxis type="number" tickFormatter={(v: number) => formatCompactMoney(v, stats.currency)} tick={{ fontSize: 12, fill: '#64748b' }} />
               <YAxis
                 type="category"
                 dataKey="shortDescription"
@@ -327,14 +331,14 @@ const SupplierDashboard: React.FC = () => {
                 tick={{ fontSize: 11, fill: '#475569' }}
               />
               <Tooltip
-                formatter={(value: number) => [formatEuro(value), 'Amount']}
+                formatter={(value: number) => [formatMoney(value, stats.currency), 'Amount']}
                 labelFormatter={(_label: string, payload: any) => payload?.[0]?.payload?.description || _label}
               />
               <Bar dataKey="totalAmount" fill="url(#barGradient)" name="Amount" radius={[0, 4, 4, 0]}>
                 <LabelList
                   dataKey="totalAmount"
                   position="right"
-                  formatter={(value: number) => formatEuro(value)}
+                  formatter={(value: number) => formatMoney(value, stats.currency)}
                   style={{ fontSize: 11, fill: '#475569' }}
                 />
               </Bar>

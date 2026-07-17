@@ -43,9 +43,9 @@ describe('SupplierDashboard', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument());
 
     expect(screen.getByText(/TAX-12345/)).toBeInTheDocument();
-    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('12,000');
-    expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('40%');
-    expect(screen.getByTestId('kpi-average-invoice')).toHaveTextContent('1,200');
+    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('\u20AC12,000');
+    expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('40.0%');
+    expect(screen.getByTestId('kpi-average-invoice')).toHaveTextContent('\u20AC1,200');
     expect(screen.getByTestId('kpi-invoice-count')).toHaveTextContent('10');
     expect(screen.getByTestId('monthly-chart')).toHaveTextContent('Monthly billing');
     expect(screen.getByTestId('supplier-share-chart')).toHaveTextContent('Supplier share');
@@ -82,8 +82,8 @@ describe('SupplierDashboard', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Globex Inc' })).toBeInTheDocument());
 
-    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('15,000');
-    expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('30%');
+    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('$15,000');
+    expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('30.0%');
     expect(screen.getByTestId('kpi-invoice-count')).toHaveTextContent('12');
   });
 
@@ -112,7 +112,7 @@ describe('SupplierDashboard', () => {
 
     await waitFor(() => expect(screen.getByTestId('kpi-invoice-count')).toHaveTextContent('0'));
 
-    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('0');
+    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('\u20AC0');
     expect(screen.getByTestId('kpi-annual-percentage')).toHaveTextContent('0%');
     expect(screen.getByTestId('monthly-empty')).toHaveTextContent('No monthly billing data');
     expect(screen.getByTestId('items-empty')).toHaveTextContent('No line item data');
