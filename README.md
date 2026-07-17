@@ -65,10 +65,10 @@ Frontend disponible en `http://localhost:5173`.
 ### Tests
 
 ```powershell
-# Frontend (29 tests)
+# Frontend (31 tests)
 cd frontend && npx vitest run
 
-# Backend (52 tests)
+# Backend (71 tests)
 cd backend && pytest -v
 ```
 
@@ -81,12 +81,14 @@ cd backend && pytest -v
 │   │   │   └── endpoints/       # FastAPI routers (invoices, suppliers, users)
 │   │   ├── core/                # Config, database engine (multi-engine), security/auth
 │   │   ├── models/              # SQLAlchemy models + Pydantic schemas
-│   │   ├── services/            # AI extraction + Blob Storage integration
+│   │   ├── services/            # AI extraction + Blob Storage (upload, delete, SAS URLs)
 │   │   └── main.py              # FastAPI app entry point
 │   ├── tests/                   # Backend tests (pytest)
 │   ├── seed_db.py               # Database seeder (engine-neutral, idempotent)
 │   ├── migrate_to_azure_sql.py  # SQLite → Azure SQL migration script
 │   ├── requirements.txt
+│   ├── mypy.ini                 # Type checking config (SQLAlchemy plugin)
+│   ├── pytest.ini               # Test config (warning filters)
 │   └── .env                     # Variables de entorno (local)
 │
 ├── frontend/
@@ -106,7 +108,9 @@ cd backend && pytest -v
 │   └── vite.config.ts
 │
 ├── skills/                      # Skills para asistentes IA
+│   ├── invoices-ai/
 │   ├── invoices-api/
+│   ├── invoices-auth/
 │   ├── invoices-db/
 │   ├── invoices-components/
 │   ├── invoices-theme/
@@ -124,9 +128,9 @@ cd backend && pytest -v
 | Endpoint | Método | Descripción | Roles |
 |----------|--------|-------------|-------|
 | `POST /api/invoices/upload` | Subir factura (PDF) → extracción IA → persistencia en Azure Blob Storage → guardado en BD | Clerk, Admin |
-| `GET /api/invoices` | Listar todas las facturas con datos del proveedor | Todos |
+| `GET /api/invoices` | Listar facturas con URL de PDF (SAS token de lectura temporal) | Todos |
 | `PATCH /api/invoices/{id}/approve` | Aprobar o rechazar una factura | Approver, Admin |
-| `DELETE /api/invoices/{id}` | Eliminar una factura y sus line items | Clerk, Admin |
+| `DELETE /api/invoices/{id}` | Eliminar factura, line items y PDF asociado en Azure Blob Storage | Clerk, Admin |
 | `GET /api/suppliers` | Listar proveedores | Todos |
 | `POST /api/suppliers` | Crear nuevo proveedor | Admin |
 | `GET /api/users/me` | Obtener perfil del usuario autenticado | Todos |
@@ -135,7 +139,7 @@ cd backend && pytest -v
 
 | Página | Descripción | Acceso |
 |--------|-------------|--------|
-| **Approval Dashboard** (`/dashboard`) | Lista de facturas con filtros por estado, búsqueda, ordenamiento por fecha/importe, paginación (15/page), acciones de aprobar/rechazar/eliminar | Admin, Approver |
+| **Approval Dashboard** (`/dashboard`) | Lista de facturas con filtros por estado, búsqueda, ordenamiento por fecha/importe, paginación (15/page), icono de visualización de PDF, acciones de aprobar/rechazar/eliminar | Admin, Approver |
 | **Upload Invoice** (`/upload`) | Subir PDF para extracción automática con revisión de datos extraídos | Admin, Approver |
 | **Suppliers** (`/suppliers`) | Gestión de proveedores con búsqueda y filtro | Admin |
 
@@ -143,6 +147,8 @@ cd backend && pytest -v
 
 - **Extracción por IA**: Azure Content Understanding extrae automáticamente número de factura, fecha, importe, proveedor, y line items del PDF
 - **Persistencia de PDF en Azure Blob Storage**: cada factura subida se guarda en `pedroortizst` / `facturas-proveedores` con naming `{supplier_id}/{invoice_id}/{uuid}.pdf`. El `file_url` almacenado es la URL real del blob
+- **Visualización de PDF con SAS token**: el endpoint `GET /api/invoices` genera URLs de lectura temporal (SAS token, 1 hora) para que el frontend pueda abrir los PDFs sin exponer las credenciales de storage
+- **Cleanup de PDF al borrar factura**: `DELETE /api/invoices/{id}` elimina el PDF del Azure Blob Storage después de confirmar el commit en BD (best-effort, no bloquea si Azure falla)
 - **Multi-engine database**: `DatabaseManager` selecciona SQLite (dev) o Azure SQL Server (prod) según `DATABASE_URL`. Sin fallback silencioso
 - **Migración SQLite → Azure SQL**: script `migrate_to_azure_sql.py` migra las 7 tablas en orden FK, transaccional, con rollback ante fallos
 - **Seed engine-neutral**: `seed_db.py` funciona con cualquier engine configurado, idempotente, transaccional
