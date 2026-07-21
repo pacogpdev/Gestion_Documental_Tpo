@@ -7,7 +7,7 @@ Sistema de extracción automatizada de datos de facturas mediante IA, con flujo 
 | Capa | Tecnología |
 |------|-----------|
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, SQLite (dev) / Azure SQL Server (prod) |
-| **Frontend** | Vite 5, React 18, TypeScript, Tailwind CSS 3, Recharts 3 |
+| **Frontend** | Vite 5, React 18, TypeScript, Tailwind CSS 3, Recharts 3, React Query (cache) |
 | **IA** | Azure AI Content Understanding SDK |
 | **Storage** | Azure Blob Storage (persistencia de PDFs de facturas, SAS tokens) |
 | **Auth** | Azure Entra ID (JWT) con bypass en desarrollo |
@@ -65,7 +65,7 @@ Frontend disponible en `http://localhost:5173`.
 ### Tests
 
 ```powershell
-# Frontend (49 tests)
+# Frontend (53 tests)
 cd frontend && npx vitest run
 
 # Backend (86 tests)
@@ -166,6 +166,7 @@ cd backend && pytest -v
 - **Eliminación de proveedor con validación**: `DELETE /api/suppliers/{id}` verifica que el proveedor no tenga facturas asociadas (409 si las tiene). Solo Admin
 - **Dashboard de estadísticas por proveedor**: `GET /api/suppliers/{id}/stats` devuelve facturación mensual (trailing 12 meses), % del total facturado, top 10 items por importe, distribución por estado, promedio por factura y top factura. Frontend con Recharts (gráficos de área, donut, pie y barras)
 - **Formateo de moneda dinámico**: los importes se muestran con el símbolo de la moneda real del proveedor (EUR, USD, GBP) extraído del API, no hardcodeado
+- **Cache stale-while-revalidate**: React Query cachea las respuestas del API (facturas, proveedores, estadísticas). Al navegar entre páginas, los datos se muestran inmediatamente del cache mientras se piden datos nuevos en background. `staleTime: 30s`, `refetchOnWindowFocus: true`
 
 ## Usuarios y Roles
 
