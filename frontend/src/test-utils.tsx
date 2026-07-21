@@ -23,11 +23,13 @@ import {
   within,
 } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 interface RenderOptionsExtended extends RenderOptions {
   route?: string;
   user?: { email: string; fullName: string; roles: any[] } | null;
   token?: string;
+  queryClient?: QueryClient;
 }
 
 function render(
@@ -36,6 +38,13 @@ function render(
     route = '/',
     user = null,
     token = undefined,
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    }),
     ...options
   }: RenderOptionsExtended = {}
 ) {
@@ -54,7 +63,9 @@ function render(
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route]}>
-        {children}
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
       </MemoryRouter>
     );
   }

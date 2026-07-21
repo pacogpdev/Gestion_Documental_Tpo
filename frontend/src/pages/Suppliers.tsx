@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -14,24 +15,18 @@ interface Supplier {
 const Suppliers: React.FC = () => {
   const { hasRole } = useAuth();
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const queryClient = useQueryClient();
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
+    queryKey: ['suppliers'],
+    queryFn: async () => {
+      const response = await apiClient.get('/suppliers');
+      return response.data as Supplier[];
+    },
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [newSupplier, setNewSupplier] = useState({ name: '', taxId: '', email: '', address: '' });
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    fetchSuppliers();
-  }, []);
-
-  const fetchSuppliers = async () => {
-    try {
-      const response = await apiClient.get('/suppliers');
-      setSuppliers(response.data);
-    } catch (error) {
-      console.error('Failed to fetch suppliers', error);
-    }
-  };
 
   const handleEdit = (supplier: Supplier) => {
     setEditingSupplier(supplier);
@@ -59,7 +54,7 @@ const Suppliers: React.FC = () => {
         await apiClient.post('/suppliers', newSupplier);
       }
       handleCancelForm();
-      fetchSuppliers();
+      await queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     } catch (error) {
       console.error('Failed to save supplier', error);
       alert('Error saving supplier');
@@ -70,7 +65,7 @@ const Suppliers: React.FC = () => {
     if (!window.confirm(`Are you sure you want to delete supplier "${supplier.name}"?`)) return;
     try {
       await apiClient.delete(`/suppliers/${supplier.id}`);
-      fetchSuppliers();
+      await queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     } catch (error: any) {
       const detail = error?.response?.data?.detail || 'Error deleting supplier';
       alert(detail);

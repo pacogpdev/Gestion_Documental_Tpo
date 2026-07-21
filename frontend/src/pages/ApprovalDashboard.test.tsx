@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
+import { QueryClient } from '@tanstack/react-query';
 import ApprovalDashboard from './ApprovalDashboard';
-import { approvalDashboardHandlers, pdfViewHandlers } from './ApprovalDashboard.handlers';
+import { approvalDashboardHandlers, mockInvoices, pdfViewHandlers } from './ApprovalDashboard.handlers';
 
 describe('ApprovalDashboard', () => {
   beforeEach(() => {
@@ -369,6 +370,68 @@ describe('ApprovalDashboard', () => {
 
       expect(screen.queryByTestId('view-pdf-btn-inv-legacy')).not.toBeInTheDocument();
       expect(screen.queryByTestId('view-pdf-btn-inv-missing')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('2.10 — React Query cache', () => {
+    it('shows cached invoices immediately on remount without a loading flash', async () => {
+      server.use(...approvalDashboardHandlers);
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: 0 } },
+      });
+      const renderWithQueryClient = () => render(<ApprovalDashboard />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/approvals',
+        queryClient,
+      });
+
+      const firstRender = renderWithQueryClient();
+      await waitFor(() => expect(screen.getByText('INV-2024-001')).toBeInTheDocument());
+      firstRender.unmount();
+
+      renderWithQueryClient();
+
+      expect(screen.getByText('INV-2024-001')).toBeInTheDocument();
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    it('refetches in the background and updates when invoice data changes', async () => {
+      let requestCount = 0;
+      const updatedInvoices = [{
+        ...mockInvoices[0],
+        invoiceNumber: 'INV-UPDATED',
+        status: 'Approved' as const,
+      }];
+
+      server.use(
+        http.get('http://localhost:8000/api/invoices', async () => {
+          requestCount += 1;
+          if (requestCount === 1) return HttpResponse.json(mockInvoices);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return HttpResponse.json(updatedInvoices);
+        }),
+      );
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: 0 } },
+      });
+      const renderWithQueryClient = () => render(<ApprovalDashboard />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/approvals',
+        queryClient,
+      });
+
+      const firstRender = renderWithQueryClient();
+      await waitFor(() => expect(screen.getByText('INV-2024-001')).toBeInTheDocument());
+      firstRender.unmount();
+
+      renderWithQueryClient();
+
+      expect(screen.getByText('INV-2024-001')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('INV-UPDATED')).toBeInTheDocument());
+      expect(screen.queryByText('INV-2024-001')).not.toBeInTheDocument();
     });
   });
 });

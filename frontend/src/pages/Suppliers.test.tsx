@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
+import { QueryClient } from '@tanstack/react-query';
 import Suppliers from './Suppliers';
 import { suppliersHandlers, mockSuppliers } from './Suppliers.handlers';
 import { useLocation } from 'react-router-dom';
@@ -322,6 +323,30 @@ describe('Suppliers', () => {
       fireEvent.click(screen.getByTestId('stats-btn-sup-001'));
 
       expect(screen.getByTestId('current-location')).toHaveTextContent('/suppliers/sup-001/dashboard');
+    });
+  });
+
+  describe('3.7 — React Query cache', () => {
+    it('shows cached suppliers immediately on remount', async () => {
+      server.use(...suppliersHandlers);
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: 0 } },
+      });
+      const renderWithQueryClient = () => render(<Suppliers />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+        token: 'fake-jwt-token',
+        route: '/suppliers',
+        queryClient,
+      });
+
+      const firstRender = renderWithQueryClient();
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+      firstRender.unmount();
+
+      renderWithQueryClient();
+
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      expect(screen.getByText('Globex Inc')).toBeInTheDocument();
     });
   });
 });

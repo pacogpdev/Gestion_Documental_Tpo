@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Area,
@@ -113,30 +114,17 @@ const SupplierDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
   const canViewStats = hasRole('Admin') || hasRole('Approver');
-  const [stats, setStats] = useState<SupplierStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { data: stats, isLoading: loading, error } = useQuery<SupplierStats>({
+    queryKey: ['supplier-stats', id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/suppliers/${id}/stats`);
+      return normalizeStats(response.data);
+    },
+    enabled: !!id && canViewStats,
+  });
 
-  useEffect(() => {
-    if (!canViewStats) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchStats = async () => {
-      try {
-        const response = await apiClient.get(`/suppliers/${id}/stats`);
-        setStats(normalizeStats(response.data));
-      } catch (requestError: any) {
-        const detail = requestError?.response?.data?.detail;
-        setError(detail || 'Unable to load supplier statistics.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [id, canViewStats]);
+  const errorMessage = (error as { response?: { data?: { detail?: string } } } | null)
+    ?.response?.data?.detail || 'Unable to load supplier statistics.';
 
   const statusData = useMemo(() => {
     if (!stats) return [];
@@ -192,7 +180,7 @@ const SupplierDashboard: React.FC = () => {
           <span className="font-extrabold">{'\u2190'}</span> Back to Suppliers
         </button>
         <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {error || 'Unable to load supplier statistics.'}
+          {errorMessage}
         </div>
       </div>
     );

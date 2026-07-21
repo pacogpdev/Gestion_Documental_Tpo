@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
 
 interface Invoice {
@@ -24,16 +25,18 @@ interface SortConfig {
 const PAGE_SIZE = 15;
 
 const ApprovalDashboard: React.FC = () => {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: invoices = [], isLoading: loading } = useQuery<Invoice[]>({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const response = await apiClient.get('/invoices');
+      return response.data as Invoice[];
+    },
+  });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
 
   // Reset to page 1 when filter, search, or sort changes
   useEffect(() => {
@@ -51,22 +54,10 @@ const ApprovalDashboard: React.FC = () => {
     });
   };
 
-  const fetchInvoices = async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get('/invoices');
-      setInvoices(response.data);
-    } catch (error) {
-      console.error('Failed to fetch invoices', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleStatusChange = async (id: string, status: 'Approved' | 'Rejected') => {
     try {
       await apiClient.patch(`/invoices/${id}/approve`, { status });
-      fetchInvoices();
+      await queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (error) {
       console.error('Failed to update status', error);
       alert('Error updating invoice status');
@@ -77,7 +68,7 @@ const ApprovalDashboard: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this invoice?')) return;
     try {
       await apiClient.delete(`/invoices/${id}`);
-      fetchInvoices();
+      await queryClient.invalidateQueries({ queryKey: ['invoices'] });
     } catch (error) {
       console.error('Failed to delete invoice', error);
       alert('Error deleting invoice');

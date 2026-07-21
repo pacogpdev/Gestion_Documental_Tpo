@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
-import { useLocation } from 'react-router-dom';
+import { QueryClient } from '@tanstack/react-query';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import SupplierDashboard from './SupplierDashboard';
 import { supplierStatsFixture, supplierStatsHandlers } from './SupplierDashboard.handlers';
 
@@ -10,6 +11,13 @@ const LocationProbe = () => {
   const location = useLocation();
   return <output data-testid="current-location">{location.pathname}</output>;
 };
+
+const SupplierDashboardRoute = ({ children = <SupplierDashboard /> }: { children?: React.ReactNode }) => (
+  <Routes>
+    <Route path="/suppliers/:id/dashboard" element={children} />
+    <Route path="*" element={children} />
+  </Routes>
+);
 
 describe('SupplierDashboard', () => {
   beforeEach(() => {
@@ -19,7 +27,7 @@ describe('SupplierDashboard', () => {
   it('denies dashboard access to users without the Admin or Approver role', async () => {
     server.use(...supplierStatsHandlers);
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-001/dashboard',
@@ -32,7 +40,7 @@ describe('SupplierDashboard', () => {
   it('loads supplier stats and renders the supplier identity, KPI values, and chart labels', async () => {
     server.use(...supplierStatsHandlers);
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-001/dashboard',
@@ -74,7 +82,7 @@ describe('SupplierDashboard', () => {
       ),
     );
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-002/dashboard',
@@ -104,7 +112,7 @@ describe('SupplierDashboard', () => {
       ),
     );
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-empty/dashboard',
@@ -125,7 +133,7 @@ describe('SupplierDashboard', () => {
       ),
     );
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-001/dashboard',
@@ -141,7 +149,7 @@ describe('SupplierDashboard', () => {
       ),
     );
 
-    render(<SupplierDashboard />, {
+    render(<SupplierDashboardRoute />, {
       user: { email: 'approver@test.com', fullName: 'Approver User', roles: ['Approver'] },
       token: 'fake-jwt-token',
       route: '/suppliers/unknown/dashboard',
@@ -155,8 +163,12 @@ describe('SupplierDashboard', () => {
 
     render(
       <>
-        <SupplierDashboard />
-        <LocationProbe />
+        <SupplierDashboardRoute>
+          <>
+            <SupplierDashboard />
+            <LocationProbe />
+          </>
+        </SupplierDashboardRoute>
       </>,
       {
         user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
@@ -169,5 +181,27 @@ describe('SupplierDashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to Suppliers' }));
 
     expect(screen.getByTestId('current-location')).toHaveTextContent('/suppliers');
+  });
+
+  it('shows cached supplier stats immediately on remount', async () => {
+    server.use(...supplierStatsHandlers);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    const renderWithQueryClient = () => render(<SupplierDashboardRoute />, {
+      user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'] },
+      token: 'fake-jwt-token',
+      route: '/suppliers/sup-001/dashboard',
+      queryClient,
+    });
+
+    const firstRender = renderWithQueryClient();
+    await waitFor(() => expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('\u20AC12,000'));
+    firstRender.unmount();
+
+    renderWithQueryClient();
+
+    expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('\u20AC12,000');
+    expect(screen.queryByTestId('dashboard-loading')).not.toBeInTheDocument();
   });
 });
