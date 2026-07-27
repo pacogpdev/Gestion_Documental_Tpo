@@ -25,7 +25,7 @@ Sistema de extracción automatizada de datos de facturas mediante IA, con flujo 
 
 ```powershell
 # 1. Clonar el repositorio
-cd C:\Users\Paco Gómez\Documents\PROYECTO_FACTURAS_PROVEEDORES
+cd C:\Users\Nombre-Usuario\Documents\PROYECTO_FACTURAS_PROVEEDORES
 
 # 2. Crear y activar virtual env (si no existe)
 python -m venv backend\.venv
