@@ -74,20 +74,23 @@ cd backend && pytest -v
 
 ## Despliegue (Docker + Kubernetes)
 
+<!-- NOTE: Replace mi-dominio.com and 192.168.x.x with your actual domain and IP.
+     These are anonymized placeholders for documentation purposes. -->
+
 ### Endpoint de producción
 
 La aplicación está desplegada y accesible en:
 
 ```
-http://facturas.pedroortiz.com:8888
+http://facturas.mi-dominio.com:8888
 ```
 
 | Servicio | URL |
 |----------|-----|
-| Frontend (Dashboard) | `http://facturas.pedroortiz.com:8888/` |
-| Backend API (Swagger) | `http://facturas.pedroortiz.com:8888/docs` |
-| Health check | `http://facturas.pedroortiz.com:8888/health` |
-| Lista de facturas | `http://facturas.pedroortiz.com:8888/api/invoices` |
+| Frontend (Dashboard) | `http://facturas.mi-dominio.com:8888/` |
+| Backend API (Swagger) | `http://facturas.mi-dominio.com:8888/docs` |
+| Health check | `http://facturas.mi-dominio.com:8888/health` |
+| Lista de facturas | `http://facturas.mi-dominio.com:8888/api/invoices` |
 
 > **Nota sobre el puerto 8888**: el acceso externo usa el puerto 8888 (no el estándar 80) debido a restricciones de la red del despliegue (Docker Desktop + WSL2 + NAT del ISP). En un entorno cloud gestionado (AKS, EKS, GKE) el tráfico fluiría por el puerto 80/443 estándar con un LoadBalancer real.
 
@@ -96,11 +99,11 @@ http://facturas.pedroortiz.com:8888
 ```
 Internet
   │
-  │  DNS: facturas.pedroortiz.com → IP pública del router
+  │  DNS: facturas.mi-dominio.com → IP pública del router
   ▼
 Router / Fortigate (NAT + port forwarding)
   │
-  │  :8888 → 192.168.200.30:8888
+  │  :8888 → 192.168.x.x:8888
   ▼
 Servidor (Windows + Docker Desktop + WSL2)
   │
@@ -108,7 +111,7 @@ Servidor (Windows + Docker Desktop + WSL2)
   ▼
 kind cluster (Kubernetes 1.36, 4 nodos)
   │
-  │  nginx Ingress Controller (Host: facturas.pedroortiz.com)
+  │  nginx Ingress Controller (Host: facturas.mi-dominio.com)
   ▼
 ┌─────────────────────┬─────────────────────┐
 │  /api/* → backend   │  /* → frontend      │
@@ -140,7 +143,7 @@ kind cluster (Kubernetes 1.36, 4 nodos)
     │   ├── backend-service.yaml      # ClusterIP :8000
     │   ├── frontend-deployment.yaml  # 2 réplicas
     │   ├── frontend-service.yaml     # ClusterIP :80
-    │   ├── ingress.yaml              # Host: facturas.pedroortiz.com
+    │   ├── ingress.yaml              # Host: facturas.mi-dominio.com
     │   └── kustomization.yaml        # Orquestador base
     └── overlays/
         ├── dev/                  # Dev con PostgreSQL
@@ -207,7 +210,7 @@ kubectl apply -k k8s/overlays/prod/
 
 1. **`imagePullPolicy: Never`**: en clusters kind, las imágenes se cargan localmente con `kind load docker-image`. Sin `imagePullPolicy: Never`, Kubernetes intenta bajarlas de Docker Hub y falla con `ImagePullBackOff`.
 
-2. **CORS dinámico**: la variable `BACKEND_CORS_ORIGINS` (en ConfigMap) controla los orígenes permitidos. En dev usar `http://facturas.pedroortiz.com`, en prod `https://facturas.pedroortiz.com`. Vacío = fallback a localhost (para desarrollo local sin Docker).
+2. **CORS dinámico**: la variable `BACKEND_CORS_ORIGINS` (en ConfigMap) controla los orígenes permitidos. En dev usar `http://facturas.mi-dominio.com`, en prod `https://facturas.mi-dominio.com`. Vacío = fallback a localhost (para desarrollo local sin Docker).
 
 3. **`VITE_API_URL=/api`**: el frontend se compila con `/api` como base URL. nginx hace reverse proxy de `/api/*` al backend, evitando CORS al ser same-origin.
 
@@ -317,7 +320,7 @@ kubectl apply -k k8s/overlays/prod/
 ### Lógica de Negocio
 
 - **Extracción por IA**: Azure Content Understanding extrae automáticamente número de factura, fecha, importe, proveedor, y line items del PDF
-- **Persistencia de PDF en Azure Blob Storage**: cada factura subida se guarda en `pedroortizst` / `facturas-proveedores` con naming `{supplier_id}/{invoice_id}/{uuid}.pdf`. El `file_url` almacenado es la URL real del blob
+- **Persistencia de PDF en Azure Blob Storage**: cada factura subida se guarda en la cuenta de storage configurada / container `facturas-proveedores` con naming `{supplier_id}/{invoice_id}/{uuid}.pdf`. El `file_url` almacenado es la URL real del blob
 - **Visualización de PDF con SAS token**: el endpoint `GET /api/invoices` genera URLs de lectura temporal (SAS token, 1 hora) para que el frontend pueda abrir los PDFs sin exponer las credenciales de storage
 - **Cleanup de PDF al borrar factura**: `DELETE /api/invoices/{id}` elimina el PDF del Azure Blob Storage después de confirmar el commit en BD (best-effort, no bloquea si Azure falla)
 - **Multi-engine database**: `DatabaseManager` selecciona SQLite (dev) o Azure SQL Server (prod) según `DATABASE_URL`. Sin fallback silencioso
