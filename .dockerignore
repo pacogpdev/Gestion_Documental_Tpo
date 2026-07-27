@@ -1,0 +1,43 @@
+# ─── Dependencies & build artifacts ──────────────────────
+**/.venv
+**/__pycache__
+**/node_modules
+**/dist
+**/.pytest_cache
+**/.mypy_cache
+
+# ─── Databases (dev only) ────────────────────────────────
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# ─── Secrets & environment ──────────────────────────────
+# Never bake env files with real credentials into images
+backend/.env
+frontend/.env
+.env.docker
+
+# ─── Version control & tooling ──────────────────────────
+.git
+.gitignore
+.atl
+.windsurf
+.vscode
+.idea
+
+# ─── Test fixtures & docs (not needed at runtime) ──────
+**/*.pdf
+backend/tests
+frontend/src/mocks
+frontend/src/test
+frontend/src/**/*.test.tsx
+frontend/src/**/*.test.ts
+frontend/TESTING.md
+
+# ─── Misc project files ─────────────────────────────────
+README.md
+CLAUDE.md
+AGENTS.md
+openspec
+skills
+deploy-kubernetes.md

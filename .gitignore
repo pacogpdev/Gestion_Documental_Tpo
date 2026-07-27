@@ -33,6 +33,7 @@ frontend/dist/
 .env.production
 .env.development
 .env.test
+.env.docker
 
 # .env.example es seguro — solo tiene placeholders, no credenciales
 !.env.example
@@ -63,3 +64,6 @@ yarn-error.log*
 
 # ── Facturas PDF (datos sensibles de proveedores) ──────────────
 *.pdf
+
+# ── Docker logs ────────────────────────────────────────────────
+docker-logs-*.csv

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: facturas-control
+data:
+  DATABASE_URL: "mssql+pymssql://user:password@pedro-ortiz-sql.database.windows.net:1433/pedro-ortiz-db_2"
+  AZURE_CONTENT_ENDPOINT: "https://aifoundry-resource-9030.services.ai.azure.com/"
+  BACKEND_CORS_ORIGINS: "https://facturas.pedroortiz.com"

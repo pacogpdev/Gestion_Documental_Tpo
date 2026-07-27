@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────
+# Docker Compose — local testing on the remote server
+# ─────────────────────────────────────────────────────────────
+# Run this on the REMOTE SERVER (via RDP), NOT on this machine.
+# Docker Desktop is installed on the remote server only.
+#
+# Usage (on the remote server, in the project root):
+#   docker compose --env-file .env.docker up --build
+#   docker exec facturas-backend python backend/seed_db.py
+#
+# Then open:
+#   http://localhost            → frontend (nginx + React)
+#   http://localhost:8000/docs  → backend API (Swagger)
+#   http://localhost:8000/health → health check
+
+services:
+  # ─── PostgreSQL database (dev/staging only) ──────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: facturas-postgres
+    environment:
+      POSTGRES_DB: facturas_db
+      POSTGRES_USER: facturas
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-facturas_dev_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facturas -d facturas_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (FastAPI + Uvicorn) ──────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: facturas-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # PostgreSQL connection — same host "postgres" resolves
+      # via Docker's internal DNS
+      DATABASE_URL: postgresql://facturas:${DB_PASSWORD:-facturas_dev_pass}@postgres:5432/facturas_db
+      # Azure AI Content Understanding
+      AZURE_CONTENT_ENDPOINT: ${AZURE_CONTENT_ENDPOINT}
+      AZURE_CONTENT_KEY: ${AZURE_CONTENT_KEY}
+      # Azure Blob Storage
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING}
+      AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER:-facturas-proveedores}
+      # Azure Entra ID (empty = dev mode, auth bypass)
+      ENTRA_ID_JWKS_URL: ${ENTRA_ID_JWKS_URL:-}
+      ENTRA_ID_TENANT_ID: ${ENTRA_ID_TENANT_ID:-}
+      ENTRA_ID_CLIENT_ID: ${ENTRA_ID_CLIENT_ID:-}
+      # CORS — comma-separated origins
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost}
+    ports:
+      - "8000:8000"
+
+  # ─── Frontend (nginx + React static bundle) ──────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: facturas-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

@@ -5,10 +5,16 @@ from typing import List, Optional
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Facturas Control"
     API_V1_STR: str = "/api/v1"
-    
+
     # Database (SQLite dev, Azure SQL prod — set via .env)
     DATABASE_URL: str = "sqlite:///backend/test.db"
-    
+
+    # CORS origins — comma-separated list of allowed origins.
+    # Empty string = fall back to localhost dev defaults in main.py.
+    BACKEND_CORS_ORIGINS: str = ""
+    """Comma-separated list of allowed CORS origins (e.g. 'https://facturas.pedroortiz.com').
+    When empty, main.py falls back to localhost dev origins."""
+
     # Azure Entra ID
     ENTRA_ID_TENANT_ID: str = ""
     ENTRA_ID_CLIENT_ID: str = ""

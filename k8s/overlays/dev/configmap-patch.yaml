@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: facturas-control
+data:
+  DATABASE_URL: "postgresql://facturas:facturas_pass@postgres:5432/facturas_db"
+  BACKEND_CORS_ORIGINS: "http://facturas.pedroortiz.com"
