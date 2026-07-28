@@ -173,7 +173,60 @@ Always call `db.flush()` after adding a new supplier if you need its ID immediat
 | `Approved` | Approved by Approver | Terminal |
 | `Rejected` | Rejected by Clerk | Deleted on re-upload |
 
-### File Structure
+### Structural Context (CodeGraph)
+
+> Derived from the CodeGraph index (653 nodes, 1,321 edges). Use for impact analysis before edits.
+
+### Hub symbols in this area
+| Symbol | Location | Callers | Tests | Note |
+|--------|----------|---------|-------|------|
+| `GUID` | schemas.py:11 | 7 (all models via PK/FK) | test_migrate_to_azure_sql.py ✅ | #1 type hub — every PK and FK depends on it |
+| `Invoice` | schemas.py:64 | 4 (invoices.py, ai_service via dict shape) | test_invoices.py ✅ | #1 data hub — changes ripple to API, AI, frontend |
+| `get_db` | database.py | all endpoints | conftest.py ✅ | #1 cross-cutting dep |
+| `DatabaseManager` | database.py | 1 (get_db) | test_migrate_to_azure_sql.py ✅ | Multi-engine selector |
+| `uq_supplier_invoice` | schemas.py:68 | 0 (DB-level) | indirect via IntegrityError test | Race-condition safety net |
+| `Supplier` | schemas.py:55 | 2 (invoices.py, suppliers.py) | conftest.py ✅ | Supplier resolution + CRUD |
+| `LineItem` | schemas.py:83 | 2 (invoices.py, cascade) | indirect | Cascade delete-orphan |
+| `user_roles` (M2M) | schemas.py:48 | 1 (User.roles relationship) | conftest.py ✅ | Users↔Roles link |
+
+### Call paths through this area
+```
+[Upload — write path]
+upload_invoice (invoices.py:132)
+  → _resolve_supplier → db.query(Supplier).filter(tax_id) → db.flush
+  → db.query(Invoice).filter(invoice_number + supplier_id) → duplicate check
+  → Invoice(...) + LineItem(...) → db.add → db.flush → db.commit
+  → except IntegrityError → rollback (uq_supplier_invoice constraint)
+
+[List — read path]
+list_invoices (invoices.py:238)
+  → db.query(Invoice).options(selectinload(Invoice.supplier))
+  → per-invoice: InvoiceResponse(id, invoiceNumber, supplier.name, ...)
+
+[Delete — cascade path]
+delete_invoice (invoices.py:280)
+  → db.query(LineItem).filter(invoice_id).delete()   [FK constraint first]
+  → db.delete(invoice) → db.commit
+  → _cleanup_uploaded_blob                             [after commit]
+```
+
+### Per-symbol test coverage
+- `Invoice` model: `backend/tests/api/test_invoices.py` ✅ (CRUD, duplicate, cascade)
+- `GUID` type: `backend/tests/test_migrate_to_azure_sql.py` ✅ (round-trip across dialects)
+- `Supplier` model: `backend/tests/conftest.py` ✅ (fixture creation)
+- `User`/`Role`/`user_roles`: `backend/tests/conftest.py` + `test_seed_db.py` ✅
+- `uq_supplier_invoice` constraint: indirect via IntegrityError test in `test_invoices.py` ✅
+- `DatabaseManager`: `test_migrate_to_azure_sql.py` ✅
+- `AuditLog`: ⚠️ no direct test found
+
+### Cross-layer dependencies
+- **`Invoice` model is the #1 cross-layer hub.** Its columns are consumed by: `invoices.py` (persistence), `ai_service.py` (output dict shape must match), `InvoiceResponse` Pydantic (schemas.py:116), frontend `Invoice` interface (ApprovalDashboard.tsx:5). Changing a column requires syncing all 4 layers.
+- **`uq_supplier_invoice` constraint** is the source of the 409 duplicate error referenced in `invoices-api`, `invoices-components`, and `invoices-testing`. The full path: constraint → `IntegrityError` → endpoint catch → HTTP 409 → frontend `server-error` testid → MSW 409 mock.
+- **`GUID` TypeDecorator** maps to 3 dialects (PG_UUID / UNIQUEIDENTIFIER / CHAR(36)). Any change to bind_param or result_value logic must be tested against all 3. The migration script (`migrate_to_azure_sql.py`) is the integration test for this.
+- **`Invoice.line_items` cascade="all, delete-orphan"** means deleting an Invoice auto-deletes its LineItems at the ORM level. The endpoint also explicitly deletes LineItems first (line 298) — belt-and-suspenders.
+- **Pydantic response models** (InvoiceResponse, SupplierStatsResponse, etc.) live in `schemas.py` alongside SQLAlchemy models. This co-location is intentional but means a schema change can affect both DB and API contracts simultaneously.
+
+## File Structure
 
 ```
 backend/app/

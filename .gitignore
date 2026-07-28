@@ -58,6 +58,9 @@ yarn-error.log*
 # ── Skill Registry (paths locales de máquina) ────────────────
 .atl/
 
+# ── CodeGraph (índice local de símbolos, no commitear) ───────
+.codegraph/
+
 # ── Misc ─────────────────────────────────────────────────────
 *.pem
 *.tsbuildinfo

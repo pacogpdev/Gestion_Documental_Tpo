@@ -216,6 +216,65 @@ export const approvalDashboardHandlers = [
 
 Use inline `server.use()` for single-test overrides.
 
+## Structural Context (CodeGraph)
+
+> Derived from the CodeGraph index (653 nodes, 1,321 edges). Use for impact analysis before edits.
+
+### Hub symbols in this area
+| Symbol | Location | Callers | Tests | Note |
+|--------|----------|---------|-------|------|
+| `AppRoutes` | routes/index.tsx:9 | 1 (app entry) | routes/index.test.tsx ✅ | Single source of routing truth |
+| `useAuth` | useAuth.ts:20 | 9 (Navbar, SupplierDashboard, Suppliers, UploadInvoice) | useAuth.test.ts ✅ | #1 frontend hub — auth context |
+| `apiClient` | api/client.ts | all data-fetching pages | indirect | Axios + JWT interceptor |
+| `Navbar` | Navbar.tsx:6 | 1 (AppRoutes) | ⚠️ no test | Auto-fetches /users/me on mount |
+| `ApprovalDashboard` | ApprovalDashboard.tsx | 1 (AppRoutes) | ApprovalDashboard.test.tsx ✅ | Invoice list + actions |
+| `UploadInvoice` | UploadInvoice.tsx:24 | 1 (AppRoutes) | ⚠️ no component test | Only MSW handlers tested |
+| `Suppliers` | Suppliers.tsx:15 | 1 (AppRoutes) | ⚠️ no test | CRUD page |
+| `SupplierDashboard` | SupplierDashboard.tsx:112 | 1 (AppRoutes) | SupplierDashboard.test.tsx ✅ | Recharts + KPIs |
+| `KpiCard` | SupplierDashboard.tsx:341 | 1 (SupplierDashboard) | indirect | 5 instances rendered |
+| `ChartCard` | SupplierDashboard.tsx:377 | 1 (SupplierDashboard) | indirect | Chart wrapper |
+
+### Call paths through this area
+```
+[AppRoutes dynamic dispatch — CodeGraph verified]
+AppRoutes (routes/index.tsx:9)
+  → Navbar          [renders <Navbar>]
+  → ApprovalDashboard  [route /dashboard]
+  → UploadInvoice     [route /upload]
+  → Suppliers         [route /suppliers]
+  → SupplierDashboard [route /suppliers/:id/dashboard]
+
+[Auth bootstrap]
+Navbar (Navbar.tsx:6) → useEffect on mount
+  → apiClient.get('/users/me')
+  → login(profile, 'dev-token') → localStorage
+  → useAuth populated → 9 callers can now use hasRole()
+
+[SupplierDashboard component tree]
+SupplierDashboard (SupplierDashboard.tsx:112)
+  → useQuery(['supplier-stats', id]) → apiClient.get('/suppliers/{id}/stats')
+  → normalizeStats (adapter: handles 3 field-name variants)
+  → KpiCard × 5        [annual total, % share, avg, count, top invoice]
+  → ChartCard → AreaChart (monthly) | PieChart (share + status) | BarChart (top items)
+  → EmptyChart          [fallback when no data]
+```
+
+### Per-symbol test coverage
+- `ApprovalDashboard`: `ApprovalDashboard.test.tsx` ✅ (sorting, empty state, approval, delete, pagination)
+- `SupplierDashboard`: `SupplierDashboard.test.tsx` + `routes/index.test.tsx` ✅ (KPIs, charts, error, routing)
+- `useAuth`: `useAuth.test.ts` ✅
+- `AppRoutes`: `routes/index.test.tsx` ✅ (routing)
+- `UploadInvoice`: ⚠️ no direct component test — only MSW handlers (`UploadInvoice.handlers.ts` → `UploadInvoice.test.tsx`)
+- `Suppliers`: ⚠️ no covering test found
+- `Navbar`: ⚠️ no covering test found
+
+### Cross-layer dependencies
+- **API contract:** endpoints referenced here (`/invoices`, `/invoices/upload`, `/suppliers/{id}/stats`) must match the canonical list in `invoices-api` skill. Both skills list them independently — drift risk.
+- **`Invoice` TypeScript interface** (ApprovalDashboard.tsx:5) must match `InvoiceResponse` Pydantic model (schemas.py:116). The backend returns camelCase via `InvoiceResponse`; frontend consumes it directly. Any field addition/removal must sync both sides.
+- **`normalizeStats` adapter** (SupplierDashboard.tsx:92) handles 3 backend field-name variants for annual total (`annualTotal` | `annualAccumulated` | `totalAmount`). This is a resilience pattern against API evolution — do not remove it without confirming the backend has stabilized on a single field name.
+- **Auth-gated rendering:** `UploadInvoice` checks `hasRole('Approver') || hasRole('Admin')` — but backend allows `Clerk` too. A Clerk user would see the restricted message on the frontend even though backend authorizes them. See `invoices-auth` skill for the full drift analysis.
+- **`useAuth` has 9 callers** — changing its return shape (e.g., adding a `permissions` array) requires updating all 9 call sites. This is the highest blast-radius change in the frontend.
+
 ## File Structure
 
 ```

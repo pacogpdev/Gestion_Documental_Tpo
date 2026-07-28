@@ -317,6 +317,57 @@ render(<Component />, {
 render(<Component />);
 ```
 
+## Structural Context (CodeGraph)
+
+> Derived from the CodeGraph index (653 nodes, 1,321 edges). Use for impact analysis before edits.
+
+### Hub symbols in this area
+| Symbol | Location | Callers | Tests | Note |
+|--------|----------|---------|-------|------|
+| `get_current_user` | security.py:72 | 6 (invoices, suppliers, users) | test_supplier_stats.py, conftest.py ✅ | #1 backend auth hub — every protected endpoint |
+| `RoleChecker` | security.py:87 | 2 (invoices, suppliers) | ⚠️ no direct test | #2 backend auth hub — RBAC guard |
+| `SecurityService.validate_token` | security.py:29 | 1 (get_current_user) | indirect | JWT validation with JWKS key rotation |
+| `OptionalHTTPBearer` | security.py:10 | 1 (security dep) | indirect | Dev-mode bypass when ENTRA_ID_JWKS_URL empty |
+| `useAuth` | useAuth.ts:20 | 9 (Navbar, SupplierDashboard, Suppliers, UploadInvoice) | useAuth.test.ts ✅ | #1 frontend auth hub |
+| `User` (frontend) | useAuth.ts:5 | 1 (useAuth) | ⚠️ no direct test | Interface only |
+
+### Call paths through this area
+```
+[Backend — prod mode]
+HTTP request → OptionalHTTPBearer → get_current_user (security.py:72)
+  → SecurityService.validate_token (security.py:29)
+    → _get_jwks (cached JWKS from Microsoft)
+    → jwt.decode(token, pub_key, audience, issuer)
+  → returns payload (with roles)
+→ RoleChecker.__call__ (security.py:91)
+  → checks user.roles ∩ allowed_roles
+  → 403 if no match
+
+[Backend — dev mode]
+HTTP request → OptionalHTTPBearer (returns None) → get_current_user
+  → ENTRA_ID_JWKS_URL empty → returns DEV_USER (Admin role)
+→ RoleChecker.__call__ → ENTRA_ID_JWKS_URL empty → returns user (skips check)
+
+[Frontend — dev mode bootstrap]
+Navbar mount → apiClient.get('/users/me')
+  → users.py:get_current_user_profile
+  → login(profile, 'dev-token') → localStorage.setItem
+```
+
+### Per-symbol test coverage
+- `get_current_user`: `backend/tests/api/test_supplier_stats.py` + `backend/tests/conftest.py` ✅
+- `RoleChecker`: ⚠️ no direct test — only exercised transitively via endpoint tests. Adding a direct test is a recommended next step.
+- `useAuth` (frontend): `frontend/src/hooks/useAuth.test.ts` ✅
+- `User` (frontend interface): no direct test (interface only)
+- `SecurityService.validate_token`: no direct test (requires Azure mocking)
+- `OptionalHTTPBearer`: no direct test
+
+### Cross-layer dependencies
+- **⚠️ Role drift (flagged by CodeGraph):** Backend `RoleChecker` allows `["Clerk", "Admin"]` on `POST /upload` and `DELETE /invoices/{id}`. Frontend `UserRole` type (useAuth.ts:3) = `'Admin' | 'Approver' | 'Viewer'` — **omits 'Clerk'**. A Clerk user authenticated via Entra ID would not see Upload/Suppliers nav links in the frontend, even though the backend authorizes them. This is a type-consistency gap, not a security hole (backend still enforces). Fix: add `'Clerk'` to the frontend `UserRole` union type.
+- **`DEV_USER["roles"]`** = `["Admin"]` (security.py:66) — in dev mode, all role-gated features are visible. This is intentional but means dev mode cannot test Clerk-only or Viewer-only UI.
+- **Auth state propagation:** `Navbar` auto-fetches `/users/me` on mount → populates `useAuth` → all 9 callers read `hasRole()`. If Navbar is not rendered (e.g., test renders a page in isolation), `useAuth` returns null and `hasRole()` returns false. The `test-utils.tsx` wrapper handles this by injecting a mock user.
+- **JWT interceptor** (client.ts) attaches `Authorization: Bearer <token>` from localStorage. In dev mode, token is `'dev-token'` (set by Navbar). Backend `OptionalHTTPBearer` returns None, so the token is never validated — dev bypass.
+
 ## File Structure
 
 ```

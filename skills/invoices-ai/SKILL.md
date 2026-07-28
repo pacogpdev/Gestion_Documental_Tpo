@@ -240,6 +240,43 @@ In `backend/app/core/config.py`:
 
 When both `AZURE_CONTENT_ENDPOINT` and `AZURE_AI_ENDPOINT` are empty → dev mode (mock data).
 
+## Structural Context (CodeGraph)
+
+> Derived from the CodeGraph index (653 nodes, 1,321 edges). Use for impact analysis before edits.
+
+### Hub symbols in this area
+| Symbol | Location | Callers | Tests | Note |
+|--------|----------|---------|-------|------|
+| `extract_invoice_data` | ai_service.py:128 | 10 (invoices.py) | test_ai_service.py ✅ | AI↔API boundary hub — changes ripple to all upload flows |
+| `get_ai_client` | ai_service.py:11 | 1 (extract_invoice_data) | indirect | Cred resolution; None triggers dev mode |
+| `_extract_amount` | ai_service.py:75 | 2 (main + line items) | indirect | Handles NumberField AND ObjectField{Amount} |
+| `_extract_currency` | ai_service.py:94 | 1 (main) | indirect | Extracts CurrencyCode from Amount object |
+| `_get_value` | ai_service.py:55 | 4 (InvoiceId, VendorTaxId, Description, fallback) | indirect | Generic typed accessor: string|number|date|int |
+| `_extract_dev_mode` | ai_service.py:26 | 1 (extract_invoice_data) | indirect | Filename-derived mock; each upload unique |
+
+### Call paths through this area
+```
+upload_invoice (invoices.py:132)
+  → extract_invoice_data (ai_service.py:128)     [10 callers — HUB]
+    → get_ai_client (ai_service.py:11)            [None → dev mode]
+    → _detect_mime_type (ai_service.py:108)       [PDF/JPG/PNG/TIFF/BMP/HEIF]
+    → client.begin_analyze("prebuilt-invoice")
+    → _extract_amount (ai_service.py:75)          [TotalAmount + line items]
+    → _extract_currency (ai_service.py:94)        [CurrencyCode]
+    → _get_value (ai_service.py:55)               [InvoiceId, VendorTaxId, Description]
+    → _extract_dev_mode (ai_service.py:26)        [fallback when Azure unconfigured or no invoice detected]
+```
+
+### Per-symbol test coverage
+- `extract_invoice_data`: covered by `backend/tests/test_ai_service.py` ✅
+- Helper functions (`_get_value`, `_extract_amount`, `_extract_currency`, `_detect_mime_mode`): covered transitively via main function tests
+- `_extract_dev_mode`: covered transitively when Azure is unconfigured in test env
+
+### Cross-layer dependencies
+- **Output contract consumed by**: `invoices.py` endpoint (persisted to Invoice + LineItem models), `InvoiceResponse` Pydantic model (schemas.py), frontend `InvoiceData` interface (UploadInvoice.tsx)
+- **Field mapping dict shape** is the integration boundary — changing key names here breaks: DB persistence (invoices.py), frontend mapping (UploadInvoice.tsx lines 70-83), MSW mock (UploadInvoice.handlers.ts)
+- **Legacy + new schema support**: both `Items`/`Amount` (legacy) and `LineItems`/`TotalAmount` (Content Understanding) are handled — do not remove legacy support without verifying no old data exists
+
 ## File Structure
 
 ```

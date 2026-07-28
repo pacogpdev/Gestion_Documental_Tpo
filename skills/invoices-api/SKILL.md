@@ -147,6 +147,58 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
 
 Always `await file.read()` — file contents are async. Never use `.file` directly.
 
+## Structural Context (CodeGraph)
+
+> Derived from the CodeGraph index (653 nodes, 1,321 edges). Use for impact analysis before edits.
+
+### Hub symbols in this area
+| Symbol | Location | Callers | Tests | Note |
+|--------|----------|---------|-------|------|
+| `get_db` | database.py | all endpoints | conftest.py ✅ | #1 cross-cutting dep — every endpoint depends on it |
+| `get_current_user` | security.py:72 | 6 (invoices, suppliers, users) | test_supplier_stats.py, conftest.py ✅ | Auth hub |
+| `RoleChecker` | security.py:87 | 2 (invoices, suppliers) | ⚠️ no direct test | RBAC guard — only transitively tested |
+| `upload_invoice` | invoices.py:132 | 0 (HTTP entry) | test_invoices.py ✅ | Upload flow entry point |
+| `_resolve_supplier` | invoices.py:22 | 1 (upload_invoice) | indirect | Supplier resolution with 3-tier tax_id fallback |
+| `_normalize_invoice_number` | invoices.py:57 | 1 (upload_invoice) | indirect | Trim + uppercase normalization |
+| `_cleanup_uploaded_blob` | invoices.py:89 | 2 (upload_invoice failure, delete_invoice) | indirect | Compensatory blob cleanup |
+| `_sas_url_for_invoice` | invoices.py:110 | 1 (list_invoices) | indirect | Per-invoice SAS with try/except |
+
+### Call paths through this area
+```
+POST /invoices/upload (upload_invoice, invoices.py:132)
+  → extract_invoice_data (ai_service.py:128)       [10 callers — AI hub]
+  → _resolve_supplier (invoices.py:22)              [3-tier tax_id fallback]
+  → _normalize_invoice_number (invoices.py:57)      [trim + uppercase]
+  → storage.upload_pdf → StorageUploadError (5 callers)
+  → db.flush + db.commit
+  → except IntegrityError → _cleanup_uploaded_blob   [race-condition safety]
+
+GET /invoices (list_invoices, invoices.py:238)
+  → selectinload(Invoice.supplier)
+  → _sas_url_for_invoice per row                     [one failure skips, doesn't break list]
+
+DELETE /invoices/{id} (delete_invoice, invoices.py:280)
+  → delete LineItems (FK constraint)
+  → delete Invoice
+  → db.commit
+  → _cleanup_uploaded_blob                            [best-effort, AFTER commit]
+```
+
+### Per-symbol test coverage
+- `upload_invoice`: covered by `backend/tests/api/test_invoices.py` ✅ (upload flow, 503 on failure, duplicate 409)
+- `delete_invoice`: covered by `backend/tests/api/test_invoices.py` ✅ (blob cleanup after commit)
+- `list_invoices`: covered by `backend/tests/api/test_invoices.py` ✅
+- `RoleChecker`: ⚠️ no direct test — only exercised transitively via endpoint tests
+- `get_current_user`: covered by `backend/tests/api/test_supplier_stats.py` + `conftest.py` ✅
+- `suppliers.py` endpoints: covered by `backend/tests/api/test_supplier_stats.py` ✅ (stats)
+- `users.py` `get_current_user_profile`: ⚠️ no direct backend test found
+
+### Cross-layer dependencies
+- **409 duplicate error** originates from 3 layers: explicit check in `upload_invoice` (line 159) → DB constraint `uq_supplier_invoice` (schemas.py:68) → `except IntegrityError` catch (line 219). All three must remain in sync.
+- **`InvoiceResponse` Pydantic model** (schemas.py:116) is the canonical API contract — frontend `Invoice` interface (ApprovalDashboard.tsx:5) must match its fields. Drift here breaks the dashboard silently.
+- **`_sas_url_for_invoice`** bridges API layer → storage layer; one failure per row is logged and skipped (dashboard stays usable).
+- **`RoleChecker(["Clerk", "Admin"])`** on upload/delete — but frontend `UserRole` type omits 'Clerk'. Not a security hole (backend enforces), but a type-consistency gap.
+
 ## File Structure
 
 ```
