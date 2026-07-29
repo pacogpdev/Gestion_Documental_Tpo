@@ -70,3 +70,9 @@ yarn-error.log*
 
 # ── Docker logs ────────────────────────────────────────────────
 docker-logs-*.csv
+
+# ── Presentation (documento local de defensa, no commitear) ───
+PRESENTATION_PLAN.md
+
+# ── Script generador de facturas de prueba (local) ─────────────
+generate_test_invoices.py

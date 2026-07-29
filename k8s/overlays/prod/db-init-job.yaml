@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: db-migrate
+  name: db-init
   namespace: facturas-control
 spec:
   ttlSecondsAfterFinished: 600
@@ -9,15 +9,14 @@ spec:
     spec:
       restartPolicy: OnFailure
       containers:
-        - name: db-migrate
+        - name: db-init
           image: facturas-backend:latest
           imagePullPolicy: Never
-          command: ["python", "-m", "backend.migrate_to_azure_sql"]
+          # seed_db.py is engine-neutral: creates schema (create_all)
+          # and seeds data regardless of MSSQL/PostgreSQL/SQLite
+          command: ["python", "backend/seed_db.py"]
           envFrom:
             - configMapRef:
                 name: backend-config
             - secretRef:
                 name: backend-secrets
-          env:
-            - name: SOURCE_DATABASE_URL
-              value: "sqlite:///backend/test.db"
