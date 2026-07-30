@@ -338,9 +338,13 @@ kubectl apply -k k8s/overlays/prod/
 
 ## Usuarios y Roles
 
-### En desarrollo local
+### Bypass de desarrollo: estado actual
 
-Cuando Azure Entra ID no está configurado (dev mode), el sistema **saltea la autenticación** y utiliza un usuario administrador por defecto:
+Cuando `ENTRA_ID_JWKS_URL` no está configurada, el backend activa el bypass de desarrollo. Actualmente este modo sigue activo en producción, por lo que **no es una configuración segura para exponer públicamente**:
+
+- Cualquier usuario puede acceder sin iniciar sesión.
+- El backend lo identifica como `DEV_USER`.
+- `DEV_USER` recibe el rol `Admin` y acceso completo.
 
 ```
 Email:    dev@facturascontrol.local
@@ -348,7 +352,7 @@ Nombre:   Dev User
 Rol:      Admin (acceso completo)
 ```
 
-No se requiere contraseña. El frontend auto-obtiene el perfil llamando a `GET /api/users/me` al cargar.
+No se requiere contraseña. El frontend auto-obtiene el perfil llamando a `GET /api/users/me` al cargar. Este comportamiento debe limitarse a desarrollo local.
 
 ### Roles del sistema
 
@@ -359,6 +363,31 @@ No se requiere contraseña. El frontend auto-obtiene el perfil llamando a `GET /
 | **Clerk** | Subir facturas, eliminar facturas (backend) |
 | **Viewer** | Solo lectura: ver dashboard y lista de proveedores |
 
-### En producción (Azure Entra ID)
+### Qué aporta Microsoft Entra ID
 
-Los usuarios y roles son gestionados por Azure Entra ID. El sistema valida tokens JWT y extrae los roles del claim `roles` del token.
+Microsoft Entra ID permite sustituir el bypass por autenticación corporativa gestionada:
+
+- Inicio de sesión corporativo de Microsoft.
+- Tokens JWT firmados y validados por el backend.
+- Roles reales: `Admin`, `Approver`, `Clerk` y `Viewer`.
+- MFA, bloqueo de cuentas y políticas de acceso.
+- Sin almacenar contraseñas en la aplicación.
+- Revocación y gestión centralizada de usuarios.
+
+### Cómo habilitarlo en producción
+
+1. Activar **HTTPS** antes de enviar credenciales o tokens: nunca deben circular por HTTP.
+2. Registrar el frontend y la API en Microsoft Entra ID, y definir scopes y roles de aplicación.
+3. Integrar MSAL en React para iniciar sesión y obtener un access token.
+4. Enviar el token en cada petición: `Authorization: Bearer <access-token>`.
+5. Configurar en el Secret de Kubernetes:
+
+   ```text
+   ENTRA_ID_TENANT_ID
+   ENTRA_ID_CLIENT_ID
+   ENTRA_ID_JWKS_URL
+   ```
+
+Con `ENTRA_ID_JWKS_URL` configurada, el backend exige el header `Authorization`, valida la firma del JWT frente al JWKS de Entra ID y verifica issuer y audience antes de aplicar las comprobaciones de rol.
+
+La base de validación de backend ya está preparada. El frontend todavía guarda un token de desarrollo en almacenamiento local y no inicia el flujo real de Entra ID; falta integrar MSAL y retirar el bypass antes de considerar seguro el despliegue productivo.
