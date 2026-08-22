@@ -2,6 +2,11 @@
 
 Sistema de extracción automatizada de datos de facturas mediante IA, con flujo de aprobación, gestión de proveedores y control de duplicados.
 
+## Presentación del Proyecto TFM
+
+- [Slides de la presentación](https://drive.google.com/drive/folders/12gwUcoQikq28u11JaFk2FpQVFYSm__Dc?usp=drive_link)
+- [Video de presentación del Proyecto TFM](https://drive.google.com/file/d/1J0el8aNuY2NI7h9AddcmvRr08YHFiyOq/view?usp=sharing)
+
 ## Stack Tecnológico
 
 | Capa | Tecnología |
