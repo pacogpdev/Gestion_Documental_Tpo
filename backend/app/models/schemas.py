@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timezone
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Column, String, ForeignKey, DateTime, Date, Numeric, Table, TypeDecorator, CHAR, UniqueConstraint
+from sqlalchemy import Boolean, Column, String, ForeignKey, DateTime, Date, Numeric, Table, TypeDecorator, CHAR, Index, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 from sqlalchemy.orm import relationship
@@ -98,9 +98,16 @@ class Role(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (Index("uq_users_tenant_entra_oid", "tenant_id", "entra_oid", unique=True,
+                            mssql_where=text("tenant_id IS NOT NULL AND entra_oid IS NOT NULL"),
+                            sqlite_where=text("tenant_id IS NOT NULL AND entra_oid IS NOT NULL")),)
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    email = Column(String(255), unique=True, nullable=False)
+    email = Column(String(255))
     full_name = Column(String(255))
+    tenant_id = Column(String(36))
+    entra_oid = Column(String(36))
+    is_disabled = Column(Boolean, default=False, nullable=False)
+    last_synced_at = Column(DateTime)
     roles = relationship("Role", secondary=user_roles)
 
 class AuditLog(Base):

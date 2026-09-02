@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 class AuditService:
     @staticmethod
-    def log_action(db: Session, user_id: str, action: str, entity_type: str, entity_id: str):
+    def log_action(db: Session, user_id: str, action: str, entity_type: str, entity_id: str, commit: bool = True):
         """
         Records a critical action in the audit_logs table.
         """
@@ -18,6 +18,7 @@ class AuditService:
             timestamp=datetime.now(timezone.utc)
         )
         db.add(audit_entry)
-        db.commit()
-        db.refresh(audit_entry)
+        if commit:
+            db.commit()
+            db.refresh(audit_entry)
         return audit_entry
