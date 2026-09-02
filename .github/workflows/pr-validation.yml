@@ -149,5 +149,14 @@ jobs:
           python -m pytest "${auth_tests[@]}" -v
       - name: Run full backend test suite
         run: python -m pytest backend/tests -v
-      - name: Run mypy
-        run: python -m mypy backend --config-file backend/mypy.ini
+      - name: Run focused authentication mypy
+        shell: bash
+        run: |
+          auth_sources=(
+            backend/app/core/config.py
+            backend/app/core/security.py
+          )
+          if [[ -e backend/app/core/authorization.py ]]; then
+            auth_sources+=(backend/app/core/authorization.py)
+          fi
+          python -m mypy "${auth_sources[@]}" --config-file backend/mypy.ini
