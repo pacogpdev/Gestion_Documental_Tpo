@@ -10,7 +10,7 @@ from backend.app.models.schemas import (
     SupplierStatsResponse,
 )
 from backend.app.core.database import get_db
-from backend.app.core.security import get_current_user, RoleChecker
+from backend.app.api.dependencies import require_operation
 import uuid
 from pydantic import BaseModel
 from typing import List, Optional
@@ -81,8 +81,7 @@ def _build_monthly_amounts(monthly_totals, start: date, end: date) -> list[dict]
 def get_supplier_stats(
     id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    _=Depends(RoleChecker(["Admin", "Approver"])),
+    current_user=Depends(require_operation("statistics")),
 ):
     """Return server-aggregated invoice statistics for one supplier."""
     supplier = db.query(Supplier).filter(Supplier.id == id).first()
@@ -175,7 +174,7 @@ def get_supplier_stats(
 def create_supplier(
     supplier_in: SupplierCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(require_operation("supplier_admin"))
 ):
     """
     Creates a new supplier.
@@ -214,7 +213,7 @@ def update_supplier(
     id: uuid.UUID,
     supplier_in: SupplierUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_operation("supplier_admin")),
 ):
     """
     Updates an existing supplier's details.
@@ -252,7 +251,7 @@ def update_supplier(
 @router.get("", response_model=List[SupplierResponse])
 def list_suppliers(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(require_operation("read"))
 ):
     """
     Lists all registered suppliers.
@@ -275,8 +274,7 @@ def list_suppliers(
 def delete_supplier(
     id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Admin"])),
+    current_user = Depends(require_operation("supplier_admin")),
 ):
     """Deletes a supplier. Only allowed if no invoices are associated."""
     supplier = db.query(Supplier).filter(Supplier.id == id).first()

@@ -595,7 +595,7 @@ def test_list_invoices_returns_null_file_url_for_legacy_upload(client, db_sessio
 
 
 def test_list_invoices_works_without_configured_storage(client, db_session):
-    app.dependency_overrides.pop(get_storage_service, None)
+    override_storage(None)
     _persist_invoice(
         db_session,
         file_url=(
