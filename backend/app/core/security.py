@@ -7,6 +7,7 @@ import requests
 from backend.app.core.config import settings
 
 JWKS_CACHE_TTL_SECONDS = 300
+JWKS_STALE_IF_ERROR_SECONDS = 300
 JWKS_REQUEST_TIMEOUT_SECONDS = 5
 
 
@@ -32,12 +33,15 @@ class SecurityService:
         self._jwks_cached_at = 0.0
 
     def _get_jwks(self, refresh: bool = False):
-        if refresh or self._jwks_cache is None or monotonic() - self._jwks_cached_at >= JWKS_CACHE_TTL_SECONDS:
+        cache_age = monotonic() - self._jwks_cached_at if self._jwks_cache is not None else None
+        if refresh or cache_age is None or cache_age >= JWKS_CACHE_TTL_SECONDS:
             try:
                 response = requests.get(settings.ENTRA_ID_JWKS_URL, timeout=JWKS_REQUEST_TIMEOUT_SECONDS)
                 response.raise_for_status()
                 keys = response.json().get("keys", [])
             except (requests.RequestException, ValueError, AttributeError) as error:
+                if self._jwks_cache and cache_age is not None and cache_age < JWKS_CACHE_TTL_SECONDS + JWKS_STALE_IF_ERROR_SECONDS:
+                    return self._jwks_cache
                 raise _JwksUnavailable() from error
             if not isinstance(keys, list):
                 raise _JwksUnavailable()

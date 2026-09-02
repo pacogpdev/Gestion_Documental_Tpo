@@ -25,6 +25,13 @@ class Response:
         return {"keys": self.keys}
 
 
+def next_response(responses):
+    response = responses.pop(0)
+    if isinstance(response, Exception):
+        raise response
+    return response
+
+
 def as_base64url(value):
     return base64url_encode(value.to_bytes((value.bit_length() + 7) // 8, "big")).decode()
 
@@ -127,6 +134,32 @@ def test_jwks_cache_refreshes_after_its_ttl(verifier, monkeypatch):
     service._get_jwks()
 
     assert len(calls) == 2
+
+
+def test_recently_expired_jwks_cache_validates_token_when_refresh_fails(verifier, monkeypatch):
+    service, private_key = verifier
+    responses = [Response([public_jwk(private_key)]), security.requests.Timeout()]
+    timestamps = iter((0, 300))
+    monkeypatch.setattr(security, "monotonic", lambda: next(timestamps))
+    monkeypatch.setattr(security.requests, "get", lambda *_args, **_kwargs: next_response(responses))
+
+    assert service.validate_token(access_token(private_key))["tid"] == "tenant-id"
+    assert service.validate_token(access_token(private_key))["tid"] == "tenant-id"
+
+
+def test_jwks_cache_is_not_used_after_stale_grace_period(verifier, monkeypatch):
+    service, private_key = verifier
+    responses = [Response([public_jwk(private_key)]), security.requests.Timeout()]
+    timestamps = iter((0, 600))
+    monkeypatch.setattr(security, "monotonic", lambda: next(timestamps))
+    monkeypatch.setattr(security.requests, "get", lambda *_args, **_kwargs: next_response(responses))
+
+    assert service.validate_token(access_token(private_key))["tid"] == "tenant-id"
+    with pytest.raises(HTTPException) as error:
+        service.validate_token(access_token(private_key))
+
+    assert error.value.status_code == 503
+    assert error.value.detail == "Identity provider unavailable"
 
 
 def test_unknown_kid_refreshes_jwks_once_before_accepting_new_key(verifier, monkeypatch):
