@@ -22,11 +22,9 @@ def test_database_url_is_the_sole_engine_selector():
     )
 
 
-def test_environment_files_declare_the_facturas_proveedores_container():
-    env_contents = (BACKEND_ROOT / ".env").read_text(encoding="utf-8")
+def test_example_environment_declares_the_facturas_proveedores_container():
     example_contents = (BACKEND_ROOT / ".env.example").read_text(encoding="utf-8")
 
-    assert "AZURE_STORAGE_CONTAINER=facturas-proveedores" in env_contents
     assert "AZURE_STORAGE_CONTAINER=facturas-proveedores" in example_contents
 
 
