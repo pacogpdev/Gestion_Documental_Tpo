@@ -313,7 +313,7 @@ def test_supplier_stats_returns_not_found_for_unknown_supplier(client):
 
 @pytest.mark.parametrize(
     ("role", "expected_status"),
-    [("Admin", 200), ("Approver", 200), ("Clerk", 403), ("Viewer", 403)],
+    [("Admin", 200), ("Approver", 200), ("Clerk", 403), ("Viewer", 200)],
 )
 def test_supplier_stats_enforces_admin_and_approver_roles(
     client, db_session, monkeypatch, role, expected_status

@@ -8,7 +8,7 @@ from backend.app.services.storage_service import (
     StorageConfigError,
     StorageUploadError,
 )
-from backend.app.core.security import get_current_user, RoleChecker
+from backend.app.api.dependencies import require_operation
 from backend.app.core.database import get_db
 import uuid
 from datetime import datetime, date
@@ -132,8 +132,7 @@ def _sas_url_for_invoice(
 async def upload_invoice(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Clerk", "Admin"])),
+    current_user = Depends(require_operation("upload")),
     storage: BlobStorageService = Depends(get_storage_service),
 ):
     """
@@ -238,7 +237,7 @@ async def upload_invoice(
 @router.get("", response_model=list[InvoiceResponse])
 def list_invoices(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_operation("read")),
     storage: BlobStorageService | None = Depends(get_storage_service),
 ):
     """
@@ -281,8 +280,7 @@ class StatusUpdate(BaseModel):
 def delete_invoice(
     id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Clerk", "Admin"])),
+    current_user = Depends(require_operation("delete")),
     storage: BlobStorageService | None = Depends(get_storage_service),
 ):
     """
@@ -307,8 +305,7 @@ async def update_invoice_status(
     id: uuid.UUID,
     body: StatusUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _ = Depends(RoleChecker(["Approver", "Admin"]))
+    current_user = Depends(require_operation("approve"))
 ):
     """
     Updates invoice status. Matches FE call /invoices/{id}/approve.

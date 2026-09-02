@@ -39,7 +39,7 @@ Tracker: draft/no-merge `feat/entra-id-https-auth` from `main`, with its tracker
 
 - [x] 1.1 PR1: write failing mode, token rejection, one-refresh/503, and policy-matrix tests; implement minimum `backend/app/core/{config,security,authorization}.py`; refactor without sensitive logs. Completed by the authorized native objective reset with strict-TDD evidence.
 - [x] 1.2 PR2: write failing sync/disable/revocation/race/forbidden-field tests; implement `backend/app/models/schemas.py`, `backend/migrations/*`, and sync service; refactor transaction boundaries.
-- [ ] 1.3 PR3: write failing 401/403-no-op, stats, and sanitized-`Me` tests; wire `backend/app/api/endpoints/{users,invoices,suppliers}.py` and `/readyz`; refactor shared dependencies.
+- [x] 1.3 PR3: write failing 401/403-no-op, stats, and sanitized-`Me` tests; wire `backend/app/api/endpoints/{users,invoices,suppliers}.py` and `/readyz`; refactor shared dependencies.
 - [ ] 1.4 PR4: write failing silent/login/logout/401 and permission-route tests; update `frontend/src/{main.tsx,hooks/useAuth.ts,api/client.ts,routes/*,components/Navbar.tsx,pages/*}`; refactor cleared state and guards.
 - [ ] 1.5 PR5: write failing rendered-manifest secret/issuer/TLS/deferred-redirect tests; update `k8s/base/{configmap,secret,ingress,kustomization}.yaml` and `k8s/overlays/prod/*`; refactor overlays.
 - [ ] 1.6 PR6: write the failing redirect-gate assertion; enable redirect only after the certificate/probe gate, run the pilot, and record slice-specific rollback evidence without restoring production `DEV_USER`.

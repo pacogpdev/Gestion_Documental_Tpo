@@ -2,14 +2,39 @@
 
 **Change**: `entra-id-https-auth`
 **Mode**: Strict TDD
-**Delivery**: `exception-ok`; `size:exception` approved. PR2 `feat/entra-id-https-auth-02-identity` → `feat/entra-id-https-auth-01-auth`.
+**Delivery**: `auto-chain`; chain strategy `feature-branch-chain`; PR3 `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; 400-line budget; current exact candidate accounting: 242 changed lines.
 
 ## Current Artifact State
 
 - [x] 1.1 PR1: config, JWKS validation, and `AuthorizationPolicy` foundation complete.
 - [x] 1.2 PR2: identity migration, synchronization, disable, and audit projection complete.
-- [ ] 1.3 PR3 and all later tasks remain incomplete.
+- [x] 1.3 PR3: endpoint matrix, sanitized `/users/me`, and public `/readyz` complete.
 - [ ] Gate 0.2 remains unresolved: an SQL operator must authorize migration, backup, and restore before production application.
+
+## PR3 Endpoint Matrix Execution — 2026-09-02
+
+**Boundary**: `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; task 1.3 only. Review accounting is +212/-30 = 242 changed lines against the base. Gate 0.2 remains unresolved; no production migration, deployment, commit, push, PR operation, or task 1.4 work occurred.
+
+### Authorized Baseline Prerequisite (Separate from Task 1.3)
+
+- Initial safety net: `python -m pytest backend/tests/api/test_invoices.py backend/tests/api/test_supplier_stats.py backend/tests/api/test_suppliers.py -q` — exit 1, 36 passed and 1 failed because the real storage provider leaked into `test_list_invoices_works_without_configured_storage`.
+- Authorized isolation correction: replaced the test-only override removal with `override_storage(None)` in `backend/tests/api/test_invoices.py`.
+- Proof: the isolated test passed (1 passed in 0.21s), then the original API safety net passed (37 passed in 3.61s). This prerequisite is not task 1.3 functional behavior.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 1.3 | `backend/tests/api/test_authorization_matrix.py` | FastAPI TestClient integration | API safety net — 37 passed | 5 failed, 8 passed: Viewer stats, Clerk deletion, Approver supplier creation, `Me` permissions, and `/readyz` were missing/wrong | 13 passed in 1.23s | Read allows all roles; stats covers four roles; 401 and distinct 403 paths assert invoice/supplier no-operation | Extracted a shared policy instance; 13 passed in 1.17s |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `python -m pytest backend/tests/api/test_authorization_matrix.py -q` — 13 passed in 1.17s. |
+| Runtime harness | FastAPI TestClient uses the real endpoint dependency graph and SQLite session: 13 focused cases pass, including 401/403 no-operation assertions. |
+| Relevant regressions | Earlier API and identity/policy runs passed 37 and 42 tests; final serial composite run passed 79 tests in 4.15s. |
+| Rollback boundary | Revert `backend/app/api/dependencies.py`, the three endpoint modules, `backend/app/main.py`, the two updated API tests, the new authorization-matrix test, and this task record; retain the explicitly authorized storage-isolation correction only if its standalone test remains needed. |
 
 ### Final Correction TDD Evidence — 2026-09-02
 
