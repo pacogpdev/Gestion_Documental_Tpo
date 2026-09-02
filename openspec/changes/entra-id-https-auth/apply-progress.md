@@ -2,7 +2,7 @@
 
 **Change**: `entra-id-https-auth`
 **Mode**: Strict TDD
-**Delivery**: `auto-chain`; chain strategy `feature-branch-chain`; PR3 `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; 400-line budget; current exact candidate accounting: 242 changed lines.
+**Delivery**: `auto-chain`; chain strategy `feature-branch-chain`; PR3 `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; 400-line budget; current total PR3 accounting: +321/-32 = 353 changed lines.
 
 ## Current Artifact State
 
@@ -13,7 +13,7 @@
 
 ## PR3 Endpoint Matrix Execution — 2026-09-02
 
-**Boundary**: `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; task 1.3 only. Review accounting is +212/-30 = 242 changed lines against the base. Gate 0.2 remains unresolved; no production migration, deployment, commit, push, PR operation, or task 1.4 work occurred.
+**Boundary**: `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; task 1.3 only. The current correction is +114/-7 = 121 changed lines against `7a8783a`; the native behavior settlement was +115/-5 = 120 changed lines before evidence compaction; current total PR3 accounting is +321/-32 = 353 changed lines against `feat/entra-id-https-auth-02-identity`. PR #9 is open. Gate 0.2 remains unresolved; no production migration, deployment, or task 1.4 work occurred.
 
 ### Authorized Baseline Prerequisite (Separate from Task 1.3)
 
@@ -36,6 +36,8 @@
 | Relevant regressions | Earlier API and identity/policy runs passed 37 and 42 tests; final serial composite run passed 79 tests in 4.15s. |
 | Rollback boundary | Revert `backend/app/api/dependencies.py`, the three endpoint modules, `backend/app/main.py`, the two updated API tests, the new authorization-matrix test, and this task record; retain the explicitly authorized storage-isolation correction only if its standalone test remains needed. |
 
+### PR9 Review-Correction — 2026-09-02
+- **Evidence**: REV-001 — production-mode FastAPI TestClient/SQLite synchronization, disabled identity 403, and denied no-op proof; REV-002 — sanitized allowed/disabled/denied outcome, reason, correlation ID, and local audit ID events with forbidden sensitive fields absent; TDD safety 13, RED 3, GREEN/REFACTOR 16; API safety 37; identity-sync/authorization 42; `git diff --check` passed; runtime harness — production-mode FastAPI TestClient with real SQLite identity/role projection; rollback boundary — `backend/app/api/dependencies.py`, `backend/app/services/identity_sync_service.py`, `backend/tests/api/test_authorization_matrix.py`, and correction evidence; routing — `apply` for pending task 1.4 only after targeted PR3 review/CI, while verify/archive remain premature.
 ### Final Correction TDD Evidence — 2026-09-02
 
 | Task | RED | GREEN | REFACTOR |

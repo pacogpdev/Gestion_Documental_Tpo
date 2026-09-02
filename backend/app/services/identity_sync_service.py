@@ -12,7 +12,9 @@ RECOGNIZED_ROLES = frozenset(("Admin", "Approver", "Clerk", "Viewer"))
 
 
 class IdentityDisabledError(PermissionError):
-    pass
+    def __init__(self, user_id):
+        super().__init__("Identity is disabled")
+        self.user_id = user_id
 
 
 class IdentitySyncService:
@@ -36,7 +38,7 @@ class IdentitySyncService:
     @staticmethod
     def _project(db: Session, user: User, claims: dict) -> User:
         if user.is_disabled:
-            raise IdentityDisabledError("Identity is disabled")
+            raise IdentityDisabledError(user.id)
 
         role_names = set(claims.get("roles", ())) & RECOGNIZED_ROLES
         user.email = claims.get("preferred_username")
