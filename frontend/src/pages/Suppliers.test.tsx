@@ -259,6 +259,7 @@ describe('Suppliers', () => {
     it.each([
       ['Admin', 'admin@test.com'],
       ['Approver', 'approver@test.com'],
+      ['Viewer', 'viewer@test.com'],
     ])('shows a chart action for %s users', async (role, email) => {
       server.use(...suppliersHandlers);
 
@@ -274,27 +275,11 @@ describe('Suppliers', () => {
       expect(screen.getByRole('button', { name: 'View statistics for Acme Corp' })).toBeInTheDocument();
     });
 
-    it('does not expose the dashboard page content to Viewer users', async () => {
+    it('hides chart actions for Clerk users', async () => {
       server.use(...suppliersHandlers);
 
       render(<Suppliers />, {
-        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'] },
-        token: 'fake-jwt-token',
-        route: '/suppliers',
-      });
-
-      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
-      expect(screen.queryByTestId('stats-btn-sup-001')).not.toBeInTheDocument();
-    });
-
-    it.each([
-      ['Clerk', 'clerk@test.com'],
-      ['Viewer', 'viewer@test.com'],
-    ])('hides chart actions for %s users', async (role, email) => {
-      server.use(...suppliersHandlers);
-
-      render(<Suppliers />, {
-        user: { email, fullName: `${role} User`, roles: [role] },
+        user: { email: 'clerk@test.com', fullName: 'Clerk User', roles: ['Clerk'] },
         token: 'fake-jwt-token',
         route: '/suppliers',
       });
@@ -347,6 +332,36 @@ describe('Suppliers', () => {
 
       expect(screen.getByText('Acme Corp')).toBeInTheDocument();
       expect(screen.getByText('Globex Inc')).toBeInTheDocument();
+    });
+  });
+
+  describe('Task 1.4 — Server-derived supplier action permissions', () => {
+    it('shows statistics actions when the synchronized profile grants statistics', async () => {
+      server.use(...suppliersHandlers);
+
+      render(<><Suppliers /><LocationProbe /></>, {
+        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'], permissions: ['read', 'statistics'] },
+        route: '/suppliers',
+      });
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+      expect(screen.getByTestId('stats-btn-sup-001')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('stats-btn-sup-001'));
+      expect(screen.getByTestId('current-location')).toHaveTextContent('/suppliers/sup-001/dashboard');
+    });
+
+    it('shows supplier administration actions only when the synchronized profile grants supplier_admin', async () => {
+      server.use(...suppliersHandlers);
+
+      render(<Suppliers />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'], permissions: ['read'] },
+        route: '/suppliers',
+      });
+
+      await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
+      expect(screen.queryByTestId('add-supplier-btn')).not.toBeInTheDocument();
+      expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('delete-supplier-btn-sup-001')).not.toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,6 @@
 import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useMsal } from '@azure/msal-react';
-import apiClient, { setTokenProvider, setUnauthorizedHandler } from '../api/client';
+import apiClient, { setAccessDeniedHandler, setTokenProvider, setUnauthorizedHandler } from '../api/client';
 
 export type UserRole = 'Admin' | 'Approver' | 'Clerk' | 'Viewer';
 export type Permission = 'read' | 'statistics' | 'upload' | 'approve' | 'delete' | 'supplier_admin';
@@ -22,30 +22,34 @@ export interface AuthSession {
 interface AuthValue {
   user: User | null;
   loading: boolean;
+  accessDenied: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
   can: (permission: Permission) => boolean;
   hasRole: (role: UserRole) => boolean;
 }
 
-const empty: AuthValue = { user: null, loading: false, login: async () => {}, logout: async () => {}, can: () => false, hasRole: () => false };
+const empty: AuthValue = { user: null, loading: false, accessDenied: false, login: async () => {}, logout: async () => {}, can: () => false, hasRole: () => false };
 const AuthContext = createContext<AuthValue>(empty);
 
 export const AuthProvider = ({ children, session, initialUser }: { children: ReactNode; session?: AuthSession; initialUser?: User }) => {
   const [user, setUser] = useState<User | null>(initialUser ?? null);
   const [loading, setLoading] = useState(!initialUser);
+  const [accessDenied, setAccessDenied] = useState(false);
   const clear = () => {
     setTokenProvider(async () => null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_profile');
+    setAccessDenied(false);
     setUser(null);
   };
 
   useEffect(() => {
+    setUnauthorizedHandler(clear);
+    setAccessDeniedHandler(() => setAccessDenied(true));
     if (initialUser) return void setLoading(false);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_profile');
-    setUnauthorizedHandler(clear);
     if (!session?.account) return void setLoading(false);
     setTokenProvider(session.acquireToken);
     session.acquireToken().then(() => apiClient.get<User>('/users/me')).then(({ data }) => setUser(data)).catch(clear).finally(() => setLoading(false));
@@ -60,7 +64,7 @@ export const AuthProvider = ({ children, session, initialUser }: { children: Rea
     await session?.logout();
   };
 
-  const value = { user, loading, login, logout, can: (permission: Permission) => !!user?.permissions.includes(permission), hasRole: (role: UserRole) => !!user?.roles.includes(role) };
+  const value = { user, loading, accessDenied, login, logout, can: (permission: Permission) => !!user?.permissions.includes(permission), hasRole: (role: UserRole) => !!user?.roles.includes(role) };
   return createElement(AuthContext.Provider, { value }, children);
 };
 

@@ -24,11 +24,11 @@ describe('SupplierDashboard', () => {
     localStorage.clear();
   });
 
-  it('denies dashboard access to users without the Admin or Approver role', async () => {
+  it('denies dashboard access when the synchronized profile omits statistics', async () => {
     server.use(...supplierStatsHandlers);
 
     render(<SupplierDashboardRoute />, {
-      user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'] },
+      user: { email: 'clerk@test.com', fullName: 'Clerk User', roles: ['Clerk'] },
       token: 'fake-jwt-token',
       route: '/suppliers/sup-001/dashboard',
     });
@@ -203,5 +203,16 @@ describe('SupplierDashboard', () => {
 
     expect(screen.getByTestId('kpi-annual-total')).toHaveTextContent('\u20AC12,000');
     expect(screen.queryByTestId('dashboard-loading')).not.toBeInTheDocument();
+  });
+
+  it('uses the synchronized statistics permission instead of a local role check', async () => {
+    server.use(...supplierStatsHandlers);
+
+    render(<SupplierDashboardRoute />, {
+      user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'], permissions: ['read', 'statistics'] },
+      route: '/suppliers/sup-001/dashboard',
+    });
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument());
   });
 });

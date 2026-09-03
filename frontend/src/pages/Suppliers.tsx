@@ -13,7 +13,7 @@ interface Supplier {
 }
 
 const Suppliers: React.FC = () => {
-  const { hasRole } = useAuth();
+  const { can } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: suppliers = [] } = useQuery<Supplier[]>({
@@ -55,8 +55,7 @@ const Suppliers: React.FC = () => {
       }
       handleCancelForm();
       await queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-    } catch (error) {
-      console.error('Failed to save supplier', error);
+    } catch {
       alert('Error saving supplier');
     }
   };
@@ -82,7 +81,7 @@ const Suppliers: React.FC = () => {
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Supplier Management</h1>
-        {hasRole('Admin') && (
+        {can('supplier_admin') && (
           <button
             data-testid="add-supplier-btn"
             onClick={() => {
@@ -181,9 +180,9 @@ const Suppliers: React.FC = () => {
                 <td className="p-4 text-slate-600">{s.taxId}</td>
                 <td className="p-4 text-slate-600">{s.email}</td>
                 <td className="p-4 text-right">
-                  {(hasRole('Admin') || hasRole('Approver')) && (
+                  {(can('statistics') || can('supplier_admin')) && (
                     <div className="flex items-center justify-end gap-3">
-                      <button
+                      {can('statistics') && <button
                         data-testid={`stats-btn-${s.id}`}
                         onClick={() => navigate(`/suppliers/${s.id}/dashboard`)}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -195,8 +194,8 @@ const Suppliers: React.FC = () => {
                           <rect x="10.5" y="8" width="3" height="12" />
                           <rect x="17" y="4" width="3" height="16" />
                         </svg>
-                      </button>
-                      {hasRole('Admin') && (
+                      </button>}
+                      {can('supplier_admin') && (
                         <>
                           <button
                             onClick={() => handleEdit(s)}

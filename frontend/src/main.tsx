@@ -17,10 +17,15 @@ const queryClient = new QueryClient({
 });
 const msal = new PublicClientApplication({ auth: { clientId: import.meta.env.VITE_ENTRA_CLIENT_ID || '', authority: `https://login.microsoftonline.com/${import.meta.env.VITE_ENTRA_TENANT_ID || ''}`, redirectUri: import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin } });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <MsalProvider instance={msal}><MsalAuthProvider><AppRoutes /></MsalAuthProvider></MsalProvider>
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+const bootstrapApplication = async () => {
+  await msal.initialize();
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <MsalProvider instance={msal}><MsalAuthProvider><AppRoutes /></MsalAuthProvider></MsalProvider>
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+};
+
+void bootstrapApplication();
