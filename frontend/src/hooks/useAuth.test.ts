@@ -1,82 +1,49 @@
-import { renderHook, act } from '../test-utils';
-import { useAuth } from './useAuth';
+import { act, renderHook, waitFor } from '../test-utils';
+import { createElement, type ReactNode } from 'react';
+import { http, HttpResponse } from 'msw';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { server } from '../mocks/server';
+import { AuthProvider, useAuth } from './useAuth';
 
 describe('useAuth', () => {
   beforeEach(() => {
-    // Clear localStorage before each test
     localStorage.clear();
+    server.use(http.get('http://localhost:8000/api/users/me', () => HttpResponse.json(profile)));
   });
 
-  it('should initialize with loading false and user null after effect runs', () => {
-    const { result } = renderHook(() => useAuth());
-    
-    // useEffect runs synchronously in test environment, setting loading to false
-    expect(result.current.loading).toBe(false);
-    expect(result.current.user).toBeNull();
-  });
+  const profile = { email: null, fullName: 'Test User', roles: ['Viewer'] as const, permissions: ['read', 'statistics'] as const };
+  const session = () => ({ account: {} as object, acquireToken: vi.fn().mockResolvedValue('access-token'), login: vi.fn(), logout: vi.fn() });
+  const wrapper = (value: ReturnType<typeof session>) => ({ children }: { children: ReactNode }) => createElement(AuthProvider, { session: value }, children);
 
-  it('should return true for hasRole only if user has the specified role', () => {
-    const { result } = renderHook(() => useAuth());
-    const mockUser = { email: 'test@example.com', fullName: 'Test User', roles: ['Admin'] as const };
-    const mockToken = 'fake-jwt-token';
+  it('restores an MSAL session, loads the server profile, and clears obsolete storage', async () => {
+    localStorage.setItem('auth_token', 'obsolete');
+    localStorage.setItem('user_profile', JSON.stringify(profile));
+    server.use(http.get('http://localhost:8000/api/users/me', ({ request }) => { expect(request.headers.get('authorization')).toBe('Bearer access-token'); return HttpResponse.json(profile); }));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapper(session()) });
 
-    act(() => {
-      result.current.login(mockUser, mockToken);
-    });
-
-    expect(result.current.hasRole('Admin')).toBe(true);
-    expect(result.current.hasRole('Viewer')).toBe(false);
-  });
-
-  it('should login and set user and token in localStorage', () => {
-    const { result } = renderHook(() => useAuth());
-    
-    const mockUser = { email: 'test@example.com', fullName: 'Test User', roles: ['Viewer'] as const };
-    const mockToken = 'fake-jwt-token';
-
-    act(() => {
-      result.current.login(mockUser, mockToken);
-    });
-
-    expect(result.current.user).toEqual(mockUser);
-    expect(localStorage.getItem('auth_token')).toBe(mockToken);
-    expect(localStorage.getItem('user_profile')).toBe(JSON.stringify(mockUser));
-  });
-
-  it('should return false for hasRole if user has no roles', () => {
-    const { result } = renderHook(() => useAuth());
-    
-    // Initially user is null, so hasRole should be false
-    expect(result.current.hasRole('Admin')).toBe(false);
-  });
-
-  it('should hydrate user and token from localStorage on mount', () => {
-    const mockUser = { email: 'test@example.com', fullName: 'Test User', roles: ['Admin'] as const };
-    const mockToken = 'fake-jwt-token';
-
-    localStorage.setItem('auth_token', mockToken);
-    localStorage.setItem('user_profile', JSON.stringify(mockUser));
-
-    const { result } = renderHook(() => useAuth());
-
-    expect(result.current.user).toEqual(mockUser);
-  });
-
-  it('should clear user and token from state and localStorage on logout', () => {
-    const { result } = renderHook(() => useAuth());
-    const mockUser = { email: 'test@example.com', fullName: 'Test User', roles: ['Admin'] as const };
-    const mockToken = 'fake-jwt-token';
-
-    act(() => {
-      result.current.login(mockUser, mockToken);
-    });
-
-    act(() => {
-      result.current.logout();
-    });
-
-    expect(result.current.user).toBeNull();
+    await waitFor(() => expect(result.current.user).toEqual(profile));
+    expect(result.current.can('statistics')).toBe(true);
     expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('user_profile')).toBeNull();
+  });
+
+  it('becomes unauthenticated after a 401 response', async () => {
+    const value = session();
+    server.use(http.get('http://localhost:8000/api/users/me', () => new HttpResponse(null, { status: 401 })));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapper(value) });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.user).toBeNull();
+    expect(result.current.can('read')).toBe(false);
+  });
+
+  it('delegates login and logout to the session while clearing local auth state', async () => {
+    const value = session();
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapper(value) });
+
+    await waitFor(() => expect(result.current.user).toEqual(profile));
+    await act(async () => { await result.current.login(); await result.current.logout(); });
+    expect(value.login).toHaveBeenCalledOnce();
+    expect(value.logout).toHaveBeenCalledOnce();
+    expect(result.current.user).toBeNull();
   });
 });

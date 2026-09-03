@@ -4,6 +4,8 @@ import { server } from '../mocks/server';
 import { supplierStatsHandlers } from '../pages/SupplierDashboard.handlers';
 import SupplierDashboard from '../pages/SupplierDashboard';
 import { Route, Routes } from 'react-router-dom';
+import { AuthProvider } from '../hooks/useAuth';
+import { RequirePermission } from './index';
 
 describe('application routes', () => {
   beforeEach(() => {
@@ -27,5 +29,16 @@ describe('application routes', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Acme Corp' })).toBeInTheDocument();
     });
+  });
+
+  it('blocks a route when the server-derived permission is absent', () => {
+    render(
+      <AuthProvider initialUser={{ email: null, fullName: 'Viewer', roles: ['Viewer'], permissions: ['read'] }}>
+        <RequirePermission permission="upload"><p>Upload allowed</p></RequirePermission>
+      </AuthProvider>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission to access this page.');
+    expect(screen.queryByText('Upload allowed')).not.toBeInTheDocument();
   });
 });

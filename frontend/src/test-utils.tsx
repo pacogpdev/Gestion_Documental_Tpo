@@ -24,10 +24,11 @@ import {
 } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider, type Permission, type User } from './hooks/useAuth';
 
 interface RenderOptionsExtended extends RenderOptions {
   route?: string;
-  user?: { email: string; fullName: string; roles: any[] } | null;
+  user?: { email: string | null; fullName: string | null; roles: any[]; permissions?: Permission[] } | null;
   token?: string;
   queryClient?: QueryClient;
 }
@@ -48,23 +49,15 @@ function render(
     ...options
   }: RenderOptionsExtended = {}
 ) {
-  // Auth injection: pre-populate localStorage
-  if (token) {
-    localStorage.setItem('auth_token', token);
-  }
-  if (user) {
-    localStorage.setItem('user_profile', JSON.stringify(user));
-  } else if (user === null && token === undefined) {
-    // If explicitly null and no token, ensure storage is clear for unauthenticated state
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_profile');
-  }
+  const all: Permission[] = ['read', 'statistics', 'upload', 'approve', 'delete', 'supplier_admin'];
+  const permissions = user?.permissions ?? (user?.roles.includes('Admin') ? all : user?.roles.includes('Approver') ? ['read', 'statistics', 'upload', 'approve'] : user?.roles.includes('Clerk') ? ['read', 'upload'] : ['read', 'statistics']);
+  const initialUser = user && { ...user, permissions } as User;
 
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route]}>
-        <QueryClientProvider client={queryClient}>
-          {children}
+          <QueryClientProvider client={queryClient}>
+          <AuthProvider initialUser={initialUser ?? undefined}>{children}</AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>
     );

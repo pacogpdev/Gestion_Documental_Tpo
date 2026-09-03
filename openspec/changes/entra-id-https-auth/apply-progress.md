@@ -2,7 +2,7 @@
 
 **Change**: `entra-id-https-auth`
 **Mode**: Strict TDD
-**Delivery**: `auto-chain`; chain strategy `feature-branch-chain`; PR3 `feat/entra-id-https-auth-03-api` → `feat/entra-id-https-auth-02-identity`; 400-line budget; current total PR3 accounting: +321/-32 = 353 changed lines.
+**Delivery**: `auto-chain`; chain strategy `feature-branch-chain`; PR4 `feat/entra-id-https-auth-04-web` → `feat/entra-id-https-auth-03-api`; 400-line budget; current candidate accounting: +235/-157 = 392 changed lines against `feat/entra-id-https-auth-03-api`.
 
 ## Current Artifact State
 
@@ -10,6 +10,29 @@
 - [x] 1.2 PR2: identity migration, synchronization, disable, and audit projection complete.
 - [x] 1.3 PR3: endpoint matrix, sanitized `/users/me`, and public `/readyz` complete.
 - [ ] Gate 0.2 remains unresolved: an SQL operator must authorize migration, backup, and restore before production application.
+
+## PR4 Web Authentication Core — 2026-09-03
+
+**Boundary**: `feat/entra-id-https-auth-04-web` → `feat/entra-id-https-auth-03-api`; this is the safe core authentication slice. No product code, dependencies, tests, task checkbox, commit, push, PR, deployment, or migration changed in this evidence correction.
+
+**Native attempt binding**: `pr4-web-authentication-core`, token `sha256:71bb7bdd3e59cc38b9353335a4429c4a0c64c2c6df09ca759c0b0043e2595739`; passing evidence remediates `sha256:4b784a66f13932b1f402a612ac7b2cc6570a3b46d0dab24f8d1629a387af2849`. No attempt lifecycle command was invoked.
+
+### Strict TDD Core Evidence
+
+| Work unit | Layer | Safety net | RED | GREEN | TRIANGULATE / REFACTOR |
+|---|---|---|---|---|---|
+| `pr4-test-harness` | Vitest/jsdom infrastructure | Initial focused command: exit 1, 2 files / 7 tests failed before test bodies (`localStorage` undefined). | N/A — no Task 1.4 behavior or test was added. | Same command: exit 0, 2 files / 7 tests passed. | N/A — deterministic harness correction only; minimal Map-backed `Storage` shim. |
+| 1.4 PR4 core | Vitest unit/component | 2 files / 7 tests passed. | 4 new failures: missing session provider and guard. | 2 files / 5 tests passed. | Token/profile/401 and route-guard paths triangulated; refactor remained green. |
+
+### Work Unit Evidence
+
+- Core behavior: MSAL session acquisition, injectable bearer provider, server-derived `/users/me` profile, 401 clearing, protected routes, and permission-aware navigation are the complete PR4 scope.
+- Focused command: `cd frontend && npx vitest run src/hooks/useAuth.test.ts src/routes/index.test.tsx` — exit 0, 2 files / 5 tests passed in 3.45s.
+- Relevant frontend suite: `cd frontend && npx vitest run` — exit 0, 8 files / 51 tests passed in 5.08s; expected Node storage, React Router, and existing MSW warnings remained non-failing. Build: `cd frontend && npm run build` — exit 0; Vite built 880 modules in 4.41s with only the existing chunk-size warning.
+- Runtime harness: Vitest/jsdom with mocked MSAL session and MSW `/users/me` exercises bearer attachment, profile load, 401 clearing, and denied-route behavior.
+- Security inspection: no access token or profile is persisted by application code outside MSAL cache; legacy storage is removed and no sensitive logging exists in the scoped candidate.
+- Deferred successor: page action `can(permission)` guards and their RED/GREEN tests remain intentionally deferred to the immediate successor chained PR. Task 1.4 remains unchecked until that successor completes.
+- Git and cleanup: `git diff --check` passed; authoritative base accounting remains +235/-157 = 392 changed lines. Rollback is the PR4 frontend boundary `frontend/{package*,src/{api/client.ts,hooks/useAuth.ts,main.tsx,routes/index.tsx,components/Navbar.tsx,test-utils.tsx,hooks/useAuth.test.ts,routes/index.test.tsx}}`, retaining the test-only harness shim.
 
 ## PR3 Endpoint Matrix Execution — 2026-09-02
 

@@ -1,10 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import UploadInvoice from '../pages/UploadInvoice';
 import Suppliers from '../pages/Suppliers';
 import ApprovalDashboard from '../pages/ApprovalDashboard';
 import SupplierDashboard from '../pages/SupplierDashboard';
+import { type Permission, useAuth } from '../hooks/useAuth';
+
+export const RequirePermission = ({ children, permission }: { children: React.ReactNode; permission: Permission }) => {
+  const { can, loading, login, user } = useAuth();
+  useEffect(() => { if (!loading && !user) void login(); }, [loading, login, user]);
+  if (loading) return <div data-testid="auth-loading">Loading session...</div>;
+  if (!user) return <div data-testid="sign-in-required">Sign-in required.</div>;
+  if (!can(permission)) return <div role="alert">You do not have permission to access this page.</div>;
+  return <>{children}</>;
+};
 
 const AppRoutes: React.FC = () => {
   return (
@@ -14,10 +24,10 @@ const AppRoutes: React.FC = () => {
         <main className="py-8">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<ApprovalDashboard />} />
-            <Route path="/upload" element={<UploadInvoice />} />
-            <Route path="/suppliers" element={<Suppliers />} />
-            <Route path="/suppliers/:id/dashboard" element={<SupplierDashboard />} />
+            <Route path="/dashboard" element={<RequirePermission permission="read"><ApprovalDashboard /></RequirePermission>} />
+            <Route path="/upload" element={<RequirePermission permission="upload"><UploadInvoice /></RequirePermission>} />
+            <Route path="/suppliers" element={<RequirePermission permission="read"><Suppliers /></RequirePermission>} />
+            <Route path="/suppliers/:id/dashboard" element={<RequirePermission permission="statistics"><SupplierDashboard /></RequirePermission>} />
             <Route path="*" element={<div className="text-center p-10 text-slate-500">Page not found</div>} />
           </Routes>
         </main>
