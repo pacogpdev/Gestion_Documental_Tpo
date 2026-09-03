@@ -112,8 +112,8 @@ const normalizeStats = (response: SupplierStatsApiResponse): SupplierStats => ({
 const SupplierDashboard: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
-  const canViewStats = hasRole('Admin') || hasRole('Approver');
+  const { can } = useAuth();
+  const canViewStats = can('statistics');
   const { data: stats, isLoading: loading, error } = useQuery<SupplierStats>({
     queryKey: ['supplier-stats', id],
     queryFn: async () => {

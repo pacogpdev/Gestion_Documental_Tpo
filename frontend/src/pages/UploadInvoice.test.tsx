@@ -4,6 +4,7 @@ import { server } from '../mocks/server';
 import { http, HttpResponse } from 'msw';
 import UploadInvoice from './UploadInvoice';
 import { uploadInvoiceHandlers } from './UploadInvoice.handlers';
+import { setTokenProvider } from '../api/client';
 
 describe('UploadInvoice', () => {
   beforeEach(() => {
@@ -169,5 +170,54 @@ describe('UploadInvoice', () => {
       // Upload button should NOT be present
       expect(screen.queryByTestId('upload-button')).not.toBeInTheDocument();
     });
+  });
+
+  describe('Task 1.4 — Server-derived upload permission', () => {
+    it('shows upload controls when the synchronized profile grants upload', async () => {
+      render(<UploadInvoice />, {
+        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'], permissions: ['read', 'upload'] },
+        route: '/upload',
+      });
+
+      expect(await screen.findByTestId('file-input')).toBeInTheDocument();
+      expect(screen.getByTestId('upload-button')).toBeDisabled();
+    });
+
+    it('hides upload controls when the synchronized profile omits upload', async () => {
+      render(<UploadInvoice />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'], permissions: ['read'] },
+        route: '/upload',
+      });
+
+      expect(screen.getByTestId('restricted-message')).toHaveTextContent('You do not have permission to upload invoices');
+      expect(screen.queryByTestId('upload-button')).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not log a bearer-carrying Axios error when an upload fails', async () => {
+    const sensitiveBearer = 'sensitive-bearer-material';
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    setTokenProvider(async () => sensitiveBearer);
+    server.use(http.post('http://localhost:8000/api/invoices/upload', () => new HttpResponse(null, { status: 500 })));
+
+    render(<UploadInvoice />, { user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'], permissions: ['upload'] } });
+    fireEvent.change(await screen.findByTestId('file-input'), { target: { files: [new File(['pdf'], 'invoice.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(screen.getByTestId('upload-button'));
+
+    await waitFor(() => expect(screen.getByTestId('server-error')).toBeInTheDocument());
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not log a bearer-carrying Axios error when the upload conflicts', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    setTokenProvider(async () => 'sensitive-bearer-material');
+    server.use(http.post('http://localhost:8000/api/invoices/upload', () => new HttpResponse(null, { status: 409 })));
+
+    render(<UploadInvoice />, { user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'], permissions: ['upload'] } });
+    fireEvent.change(await screen.findByTestId('file-input'), { target: { files: [new File(['pdf'], 'invoice.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(screen.getByTestId('upload-button'));
+
+    await waitFor(() => expect(screen.getByTestId('server-error')).toBeInTheDocument());
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });

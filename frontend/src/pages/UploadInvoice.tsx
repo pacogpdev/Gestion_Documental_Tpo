@@ -22,14 +22,14 @@ interface InvoiceData {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const UploadInvoice: React.FC = () => {
-  const { hasRole } = useAuth();
+  const { can } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [extractedData, setExtractedData] = useState<InvoiceData | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const canUpload = hasRole('Approver') || hasRole('Admin');
+  const canUpload = can('upload');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -82,7 +82,6 @@ const UploadInvoice: React.FC = () => {
         })),
       });
     } catch (error: any) {
-      console.error('Upload failed', error);
       const status = error?.response?.status;
       if (status === 409) {
         const msg = error?.response?.data?.detail || 'Duplicate invoice number for this supplier.';

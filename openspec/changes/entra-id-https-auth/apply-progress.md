@@ -9,6 +9,7 @@
 - [x] 1.1 PR1: config, JWKS validation, and `AuthorizationPolicy` foundation complete.
 - [x] 1.2 PR2: identity migration, synchronization, disable, and audit projection complete.
 - [x] 1.3 PR3: endpoint matrix, sanitized `/users/me`, and public `/readyz` complete.
+- [x] 1.4 PR4: MSAL core, route guards, navigation, and page action permission guards complete across the chained core and successor slices.
 - [ ] Gate 0.2 remains unresolved: an SQL operator must authorize migration, backup, and restore before production application.
 
 ## PR4 Web Authentication Core — 2026-09-03
@@ -33,6 +34,51 @@
 - Security inspection: no access token or profile is persisted by application code outside MSAL cache; legacy storage is removed and no sensitive logging exists in the scoped candidate.
 - Deferred successor: page action `can(permission)` guards and their RED/GREEN tests remain intentionally deferred to the immediate successor chained PR. Task 1.4 remains unchecked until that successor completes.
 - Git and cleanup: `git diff --check` passed; authoritative base accounting remains +235/-157 = 392 changed lines. Rollback is the PR4 frontend boundary `frontend/{package*,src/{api/client.ts,hooks/useAuth.ts,main.tsx,routes/index.tsx,components/Navbar.tsx,test-utils.tsx,hooks/useAuth.test.ts,routes/index.test.tsx}}`, retaining the test-only harness shim.
+
+## PR4b Page Action Permissions — 2026-09-03
+
+**Boundary**: `feat/entra-id-https-auth-04-actions` → `feat/entra-id-https-auth-04-web`; only Task 1.4's deferred page action guards and their behavior tests. Native binding: `pr4b-page-action-permissions`, token `sha256:2e60f47ecd3dbdb2cea477c3081fe89658d24893ba6cadeb04f9ff044f167c3c`; no attempt lifecycle command was invoked.
+
+### Strict TDD Evidence
+
+| Task | Test files | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 1.4 page actions | `ApprovalDashboard`, `UploadInvoice`, `Suppliers`, `SupplierDashboard` tests | Vitest component | 4 files / 43 tests passed | 7 failures / 43 passes: missing permission-based approval, delete, upload, statistics, supplier-admin, and dashboard guards | 4 files / 49 tests passed | Explicit permission-bearing Viewer interaction plus permission-absent Admin visibility prove permissions, not roles | Existing stale Viewer statistics expectations aligned with the approved server permission contract; focused suite remained green. |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `cd frontend && npx vitest run src/pages/ApprovalDashboard.test.tsx src/pages/UploadInvoice.test.tsx src/pages/Suppliers.test.tsx src/pages/SupplierDashboard.test.tsx` — exit 0, 4 files / 49 tests passed in 3.96s. |
+| Runtime harness | Vitest/jsdom with AuthProvider permission injection, MSW, React Query, and MemoryRouter exercised permission-based action visibility plus approved invoice PATCH and Viewer statistics navigation. |
+| Full frontend suite | `cd frontend && npx vitest run` — exit 0, 8 files / 57 tests passed in 5.33s. |
+| Build | `cd frontend && npm run build` — exit 0, 880 modules transformed in 6.49s; existing chunk-size warning only. |
+| Rollback boundary | Revert `frontend/src/pages/{ApprovalDashboard,UploadInvoice,Suppliers,SupplierDashboard}.{tsx,test.tsx}` and this Task 1.4 record; this removes only PR4b page action guards. |
+
+- Every prior direct page `hasRole` check is now `can(permission)`: invoice approve/reject uses `approve`; invoice delete uses `delete`; upload uses `upload`; supplier statistics and dashboard use `statistics`; supplier create/edit/delete uses `supplier_admin`.
+- The UI remains a usability guard only; API authorization remains authoritative. No token/profile persistence or sensitive logging was introduced, and PR4 loading, unauthenticated, 401, and 403 behavior was untouched.
+- Task 1.4 is complete because the PR4 core already covered session, login/logout, 401, protected routes, and navigation; this successor closes its remaining page action permission requirements. Final accounting against `feat/entra-id-https-auth-04-web` is +152/-34 = 186 changed lines. TLS, rollout, Task 1.5, and later work remain out of scope.
+
+## PR4b Task 1.4 Critical Remediation — 2026-09-03
+
+**Boundary**: `feat/entra-id-https-auth-04-actions` → `feat/entra-id-https-auth-04-web`; only the three failed Task 1.4 findings. Native binding: `pr4b-task14-critical-remediation`, token `sha256:77eda93ea4fa71f9331ff7415bb63e4582d581c10b753ee997c6dcfe25060ee6`; maximum two attempts and 186 additional changed lines. No `gentle-ai sdd-attempt` command was invoked. This evidence remediates the parent-settlement target `sha256:d272642325472869f7db0c73228e6f9403c4246b37baf421bbf3ca31b48f1b08` and does not change the independent verify report verdict.
+
+### Strict TDD Evidence
+
+| Finding | Safety net | RED | GREEN / Triangulation / Refactor |
+|---|---|---|---|
+| MSAL initialization | 6 files / 54 tests passed | `src/main.test.tsx` failed: `initialize` was not called. | Production-adapter deferred and already-resolved initialization cases passed; React rendering starts only after initialization resolves. |
+| Bearer-safe page errors | Same green baseline | Upload 500 test failed because `console.error` received an Axios error. | 500 and 409 bearer-carrying failures pass with no console error; all four page raw Axios logging calls were removed. |
+| Direct authenticated 403 | Same green baseline | Missing 403 handler, missing access-denied state, and missing alert test each failed. | Axios/MSW, AuthProvider, and route alert tests pass: 403 shows access denied and preserves the authenticated session, while 401 remains distinct. |
+
+### Work Unit Evidence
+
+- Focused GREEN/refactor: `cd frontend && npx vitest run src/main.test.tsx src/api/client.test.ts src/hooks/useAuth.test.ts src/routes/index.test.tsx src/pages/UploadInvoice.test.tsx` — exit 0, 5 files / 21 tests passed in 3.65s.
+- Runtime harness: deferred production-MSAl adapter mock plus MSW Axios 403/500/409 responses, AuthProvider, and route notice directly exercised initialization ordering, bearer-safe failures, session-preserving 403, and visible denial UX.
+- Full frontend suite: `cd frontend && npx vitest run` — exit 0, 9 files / 64 tests passed in 6.24s. Build: `cd frontend && npm run build` — exit 0, 880 modules transformed in 6.75s; only the existing chunk-size warning remains.
+- Cleanup: page source has no `console.error`, `console.warn`, or `console.log`; application code still persists neither raw tokens nor profile data outside MSAL cache. No TLS, rollout, Task 1.5+, migration, commit, push, PR, or deployment action occurred.
+- Git: `git diff --check` passed; authoritative `git diff --numstat feat/entra-id-https-auth-04-web` is +280/-53 = 333 changed lines, below the 400-line limit and 119 lines above the reported 214-line pre-remediation diff.
+- Rollback boundary: revert `frontend/src/{main.tsx,api/client.ts,hooks/useAuth.ts,routes/index.tsx,pages/{ApprovalDashboard,UploadInvoice,Suppliers}.tsx,main.test.tsx,api/client.test.ts,hooks/useAuth.test.ts,routes/index.test.tsx,pages/UploadInvoice.test.tsx}` and this remediation record; it removes only this correction.
 
 ## PR3 Endpoint Matrix Execution — 2026-09-02
 

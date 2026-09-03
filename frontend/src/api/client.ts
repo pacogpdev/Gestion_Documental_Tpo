@@ -3,9 +3,11 @@ import axios from 'axios';
 export type TokenProvider = () => Promise<string | null>;
 let tokenProvider: TokenProvider = async () => null;
 let onUnauthorized = () => {};
+let onAccessDenied = () => {};
 
 export const setTokenProvider = (provider: TokenProvider) => { tokenProvider = provider; };
 export const setUnauthorizedHandler = (handler: () => void) => { onUnauthorized = handler; };
+export const setAccessDeniedHandler = (handler: () => void) => { onAccessDenied = handler; };
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -29,6 +31,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) onUnauthorized();
+    if (error.response?.status === 403) onAccessDenied();
     return Promise.reject(error);
   },
 );

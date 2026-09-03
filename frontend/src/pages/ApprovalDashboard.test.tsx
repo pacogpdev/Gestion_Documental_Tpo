@@ -434,4 +434,47 @@ describe('ApprovalDashboard', () => {
       expect(screen.queryByText('INV-2024-001')).not.toBeInTheDocument();
     });
   });
+
+  describe('Task 1.4 — Server-derived action permissions', () => {
+    it('allows approve and reject only when the synchronized profile grants approve', async () => {
+      server.use(...approvalDashboardHandlers);
+      let approved = false;
+      server.use(http.patch('http://localhost:8000/api/invoices/:id/approve', async ({ request }) => {
+        approved = (await request.json() as { status: string }).status === 'Approved';
+        return HttpResponse.json({ id: 'inv-001', status: 'Approved' });
+      }));
+
+      const { unmount } = render(<ApprovalDashboard />, {
+        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'], permissions: ['read', 'approve'] },
+        route: '/dashboard',
+      });
+
+      await waitFor(() => expect(screen.getByTestId('approve-btn-inv-001')).toBeInTheDocument());
+      expect(screen.getByTestId('reject-btn-inv-001')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('approve-btn-inv-001'));
+      await waitFor(() => expect(approved).toBe(true));
+      unmount();
+
+      render(<ApprovalDashboard />, {
+        user: { email: 'admin@test.com', fullName: 'Admin User', roles: ['Admin'], permissions: ['read'] },
+        route: '/dashboard',
+      });
+
+      await waitFor(() => expect(screen.getByText('INV-2024-001')).toBeInTheDocument());
+      expect(screen.queryByTestId('approve-btn-inv-001')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('reject-btn-inv-001')).not.toBeInTheDocument();
+    });
+
+    it('shows the delete action only when the synchronized profile grants delete', async () => {
+      server.use(...approvalDashboardHandlers);
+
+      render(<ApprovalDashboard />, {
+        user: { email: 'viewer@test.com', fullName: 'Viewer User', roles: ['Viewer'], permissions: ['read'] },
+        route: '/dashboard',
+      });
+
+      await waitFor(() => expect(screen.getByText('INV-2024-001')).toBeInTheDocument());
+      expect(screen.queryByTestId('delete-btn-inv-001')).not.toBeInTheDocument();
+    });
+  });
 });

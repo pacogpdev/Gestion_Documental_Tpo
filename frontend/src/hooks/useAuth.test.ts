@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../mocks/server';
 import { AuthProvider, useAuth } from './useAuth';
+import apiClient from '../api/client';
 
 describe('useAuth', () => {
   beforeEach(() => {
@@ -34,6 +35,20 @@ describe('useAuth', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
     expect(result.current.can('read')).toBe(false);
+  });
+
+  it('keeps the authenticated session and exposes access denied after a direct API 403', async () => {
+    server.use(http.get('http://localhost:8000/api/forbidden', () => new HttpResponse(null, { status: 403 })));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapper(session()) });
+
+    await waitFor(() => expect(result.current.user).toEqual(profile));
+    await act(async () => {
+      await expect(apiClient.get('/forbidden')).rejects.toMatchObject({ response: { status: 403 } });
+    });
+
+    await waitFor(() => expect(result.current.accessDenied).toBe(true));
+    expect(result.current.user).toEqual(profile);
+    expect(result.current.can('read')).toBe(true);
   });
 
   it('delegates login and logout to the session while clearing local auth state', async () => {

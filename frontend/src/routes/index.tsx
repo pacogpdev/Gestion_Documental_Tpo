@@ -16,11 +16,17 @@ export const RequirePermission = ({ children, permission }: { children: React.Re
   return <>{children}</>;
 };
 
+export const AccessDeniedNotice = () => {
+  const { accessDenied } = useAuth();
+  return accessDenied ? <div role="alert" data-testid="access-denied">Access denied. You do not have permission to complete this action.</div> : null;
+};
+
 const AppRoutes: React.FC = () => {
   return (
     <Router>
       <div className="min-h-screen bg-slate-50">
         <Navbar />
+        <AccessDeniedNotice />
         <main className="py-8">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

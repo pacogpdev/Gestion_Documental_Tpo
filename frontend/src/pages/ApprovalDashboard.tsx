@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useAuth } from '../hooks/useAuth';
 
 interface Invoice {
   id: string;
@@ -26,6 +27,7 @@ const PAGE_SIZE = 15;
 
 const ApprovalDashboard: React.FC = () => {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
   const { data: invoices = [], isLoading: loading } = useQuery<Invoice[]>({
     queryKey: ['invoices'],
     queryFn: async () => {
@@ -58,8 +60,7 @@ const ApprovalDashboard: React.FC = () => {
     try {
       await apiClient.patch(`/invoices/${id}/approve`, { status });
       await queryClient.invalidateQueries({ queryKey: ['invoices'] });
-    } catch (error) {
-      console.error('Failed to update status', error);
+    } catch {
       alert('Error updating invoice status');
     }
   };
@@ -69,8 +70,7 @@ const ApprovalDashboard: React.FC = () => {
     try {
       await apiClient.delete(`/invoices/${id}`);
       await queryClient.invalidateQueries({ queryKey: ['invoices'] });
-    } catch (error) {
-      console.error('Failed to delete invoice', error);
+    } catch {
       alert('Error deleting invoice');
     }
   };
@@ -245,7 +245,7 @@ const ApprovalDashboard: React.FC = () => {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex justify-end items-center gap-2">
-                    {inv.status === 'Pending' && (
+                    {inv.status === 'Pending' && can('approve') && (
                       <>
                         <button
                           data-testid={`reject-btn-${inv.id}`}
@@ -279,7 +279,7 @@ const ApprovalDashboard: React.FC = () => {
                         </svg>
                       </button>
                     )}
-                    <button
+                    {can('delete') && <button
                       data-testid={`delete-btn-${inv.id}`}
                       onClick={() => handleDelete(inv.id)}
                       className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -292,7 +292,7 @@ const ApprovalDashboard: React.FC = () => {
                         <path d="M14 11v6" />
                         <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                       </svg>
-                    </button>
+                    </button>}
                   </div>
                 </td>
               </tr>
