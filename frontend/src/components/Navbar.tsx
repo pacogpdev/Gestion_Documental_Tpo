@@ -1,24 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import apiClient from '../api/client';
 
 const Navbar: React.FC = () => {
-  const { user, login, logout, hasRole } = useAuth();
-
-  // Auto-fetch user profile on mount (dev mode)
-  useEffect(() => {
-    if (!localStorage.getItem('user_profile')) {
-      apiClient.get('/users/me')
-        .then(res => {
-          const profile = res.data;
-          login(profile, 'dev-token');
-        })
-        .catch(err => console.warn('Could not fetch user profile', err));
-    }
-    // Only run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { user, logout, can } = useAuth();
 
   return (
     <nav className="bg-slate-800 text-white px-6 py-4 flex justify-between items-center shadow-md">
@@ -30,11 +15,11 @@ const Navbar: React.FC = () => {
         <div className="flex gap-6 text-sm font-medium">
           <Link to="/dashboard" className="hover:text-blue-300 transition-colors">Dashboard</Link>
           
-           {(hasRole('Approver') || hasRole('Admin')) && (
+           {can('upload') && (
              <Link to="/upload" className="hover:text-blue-300 transition-colors">Upload Invoice</Link>
            )}
            
-           {(hasRole('Approver') || hasRole('Admin')) && (
+           {can('read') && (
              <Link to="/suppliers" className="hover:text-blue-300 transition-colors">Suppliers</Link>
            )}
         </div>
@@ -44,12 +29,7 @@ const Navbar: React.FC = () => {
         {user && (
           <span className="text-xs text-slate-400">{user.fullName} ({user.roles[0]})</span>
         )}
-        <button 
-          onClick={logout}
-          className="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs transition-colors"
-        >
-          Logout
-        </button>
+        {user && <button onClick={logout} className="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs transition-colors">Logout</button>}
       </div>
     </nav>
   );
