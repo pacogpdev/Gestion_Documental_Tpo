@@ -6,7 +6,6 @@ namespace: facturas-control
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml

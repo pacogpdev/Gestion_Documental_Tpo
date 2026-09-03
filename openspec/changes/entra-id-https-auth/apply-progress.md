@@ -10,7 +10,9 @@
 - [x] 1.2 PR2: identity migration, synchronization, disable, and audit projection complete.
 - [x] 1.3 PR3: endpoint matrix, sanitized `/users/me`, and public `/readyz` complete.
 - [x] 1.4 PR4: MSAL core, route guards, navigation, and page action permission guards complete across the chained core and successor slices.
+- [x] 1.5 PR5: secret-safe cert-manager issuer, production TLS ingress, and deferred redirect manifests complete by local rendered-manifest evidence only.
 - [ ] Gate 0.2 remains unresolved: an SQL operator must authorize migration, backup, and restore before production application.
+- [ ] Gate 0.3 remains unresolved: platform owners must provide cert-manager, DNS solver secret delivery, issuer inputs, DNS, and ingress support before any deployment.
 
 ## PR4 Web Authentication Core — 2026-09-03
 
@@ -79,6 +81,31 @@
 - Cleanup: page source has no `console.error`, `console.warn`, or `console.log`; application code still persists neither raw tokens nor profile data outside MSAL cache. No TLS, rollout, Task 1.5+, migration, commit, push, PR, or deployment action occurred.
 - Git: `git diff --check` passed; authoritative `git diff --numstat feat/entra-id-https-auth-04-web` is +280/-53 = 333 changed lines, below the 400-line limit and 119 lines above the reported 214-line pre-remediation diff.
 - Rollback boundary: revert `frontend/src/{main.tsx,api/client.ts,hooks/useAuth.ts,routes/index.tsx,pages/{ApprovalDashboard,UploadInvoice,Suppliers}.tsx,main.test.tsx,api/client.test.ts,hooks/useAuth.test.ts,routes/index.test.tsx,pages/UploadInvoice.test.tsx}` and this remediation record; it removes only this correction.
+
+## PR5 TLS and cert-manager Manifests — 2026-09-03
+
+**Boundary**: `feat/entra-id-https-auth-05-tls` → `feat/entra-id-https-auth-04-actions`; only Task 1.5's secret hygiene, cert-manager issuer, production TLS ingress, and deferred redirect. Native binding: `pr5-tls-manifests`, token `sha256:7eaabe4191248b4f897bd8a2240b987e6297cded5956bc0cfe6a58f7e26dc622`; no attempt lifecycle command was invoked.
+
+### Strict TDD Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 1.5 | `backend/tests/test_k8s_manifests.py` | Rendered-manifest pytest | No existing manifest test existed: `pytest tests/test_k8s_manifests.py -q` exited 4 (`file or directory not found`) before the new test was written. | 3 failed in 0.50s: `ClusterIssuer` and explicit redirect deferral were absent. | 3 passed in 0.11s after the minimum manifest changes. | 4 passed in 0.14s after adding the base HTTP-only case. | 4 passed in 0.14s after extracting the production-render helper. |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `cd backend && pytest tests/test_k8s_manifests.py -q` — exit 0, 4 passed in 0.12s. |
+| Runtime harness | Test-local deterministic PyYAML renderer recursively loads the repository Kustomizations and merges their declared target patches; it exercised secret references, issuer/TLS wiring, hostname/routing consistency, and redirect deferral without a cluster or network call. |
+| Renderer | `kubectl kustomize k8s/overlays/prod` is unavailable because `kubectl` is not on `PATH`; no alternative cluster tool or deployment was attempted. |
+| Relevant regression | `cd backend && pytest tests/unit/test_auth_config.py -q` — exit 0, 4 passed in 0.03s. |
+| Rollback boundary | Revert `backend/tests/test_k8s_manifests.py`, `backend/requirements.txt`, `k8s/base/{configmap.yaml,kustomization.yaml,secret.yaml}`, `k8s/overlays/prod/{configmap-patch.yaml,cluster-issuer.yaml,ingress-tls-patch.yaml,kustomization.yaml}`, the Task 1.5 checkbox/parent reference, and this PR5 record. |
+
+- `backend-secrets` and `cert-manager-azuredns` are references only; no Secret, credentials, certificate, DNS token, tenant secret, or realistic secret value is rendered or created. An absent external secret prevents the affected workload or DNS solver from becoming ready.
+- The base HTTP routes remain `/api` and `/health` to `backend:8000` and `/` to `frontend:80`. Production adds `facturas-tls` through ingress-shim with `nginx.ingress.kubernetes.io/ssl-redirect: "false"`; Task 1.6 alone may change that after `Certificate Ready=True` and an HTTPS probe/pilot.
+- Gate 0.2 and Gate 0.3 remain closed. This work performed no database migration, cluster mutation, deployment, DNS change, certificate request, real secret creation, redirect enablement, commit, push, or PR action. The Task 1.4-scoped `verify-report.md` is unchanged; whole-change verification remains premature.
+- Git cleanup: `git diff --check` passed; inclusive accounting against `feat/entra-id-https-auth-04-actions` is +194/-20 = 214 changed lines, including the three untracked test/manifest files.
 
 ## PR3 Endpoint Matrix Execution — 2026-09-02
 

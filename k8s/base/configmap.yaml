@@ -4,8 +4,6 @@ metadata:
   name: backend-config
   namespace: facturas-control
 data:
-  # Dev/staging default — prod overlay overrides with Azure SQL URL
-  DATABASE_URL: "postgresql://facturas:facturas_pass@postgres:5432/facturas_db"
   AZURE_CONTENT_ENDPOINT: "https://aifoundry-resource-9030.services.ai.azure.com/"
   AZURE_STORAGE_CONTAINER: "facturas-proveedores"
   BACKEND_CORS_ORIGINS: "https://facturas.pedroortiz.com"
