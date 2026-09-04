@@ -5,6 +5,7 @@ namespace: facturas-control
 
 resources:
   - ../../base
+  - cluster-issuer.yaml
   - db-init-job.yaml
 
 patches:
@@ -12,3 +13,7 @@ patches:
     target:
       kind: ConfigMap
       name: backend-config
+  - path: ingress-tls-patch.yaml
+    target:
+      kind: Ingress
+      name: facturas-ingress
